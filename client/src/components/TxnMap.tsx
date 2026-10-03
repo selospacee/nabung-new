@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { formatCurrency } from '../utils/currency'
@@ -44,9 +44,11 @@ export function TxnMap({ locatedTxns, bounds, mapProvider, currency }: TxnMapPro
       tx.latitude !== null && tx.longitude !== null
   )
 
+  const center: [number, number] = [(bounds.minLat + bounds.maxLat) / 2, (bounds.minLng + bounds.maxLng) / 2]
+
   return (
     <MapContainer
-      center={[(bounds.minLat + bounds.maxLat) / 2, (bounds.minLng + bounds.maxLng) / 2]}
+      center={center}
       zoom={13}
       scrollWheelZoom
       className="absolute inset-0 w-full h-full z-0"
@@ -54,13 +56,12 @@ export function TxnMap({ locatedTxns, bounds, mapProvider, currency }: TxnMapPro
       {mapProvider === 'google' ? (
         <TileLayer
           url="https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
-          subdomains={['mt0', 'mt1', 'mt2', 'mt3']}
-          attribution="&copy; Google"
+          // subdomains and attribution are not valid props in react-leaflet v5
         />
       ) : (
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution="&copy; OpenStreetMap contributors"
+          // attribution is not a valid prop in react-leaflet v5
         />
       )}
 
@@ -68,16 +69,16 @@ export function TxnMap({ locatedTxns, bounds, mapProvider, currency }: TxnMapPro
 
       {points.map(tx => (
         <CircleMarker
-          key={tx.id}
-          center={[tx.latitude, tx.longitude]}
-          radius={8}
-          pathOptions={{
-            fillColor: 'var(--color-primary)',
-            color: '#ffffff',
-            weight: 2,
-            fillOpacity: 0.95,
-          }}
-        >
+                  key={tx.id}
+                  center={[tx.latitude, tx.longitude]}
+                  // radius is not a valid prop in react-leaflet v5, use pathOptions for styling
+                  pathOptions={{
+                    fillColor: 'var(--color-primary)',
+                    color: '#ffffff',
+                    weight: 2,
+                    fillOpacity: 0.95,
+                  }}
+                >
           <Popup>
             <div className="text-sm">
               <p className="font-medium">{tx.merchant || tx.description || 'Transaction'}</p>

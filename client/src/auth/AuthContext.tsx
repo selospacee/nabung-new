@@ -6,6 +6,7 @@ import type { User } from '../types'
 interface AuthContextType {
   user: User | null
   isLoading: boolean
+  isOnboarded: boolean
   login: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string, name: string, currency: string, timezone: string) => Promise<void>
   logout: () => void
@@ -98,16 +99,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const hashedPassword = await hashPassword(password)
 
     const newUser: User = {
-      id,
-      email,
-      name,
-      currency: currency || 'USD',
-      timezone: timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-      theme: 'dark',
-      defaultAccountId: null,
-      createdAt: now,
-      passwordHash: hashedPassword
-    }
+          id,
+          email,
+          name,
+          currency: currency || 'USD',
+          timezone: timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+          theme: 'dark',
+          defaultAccountId: null,
+          createdAt: now,
+          passwordHash: hashedPassword,
+          time: now
+        }
 
     await db.users.add(newUser)
     // Create default categories

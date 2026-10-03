@@ -10,6 +10,7 @@ import { BudgetsPage } from './pages/BudgetsPage'
 import { ReportsPage } from './pages/ReportsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { useAuth } from './auth/AuthContext'
+import { SupabaseAuthProvider } from './auth/SupabaseAuthContext'
 
 function AppRoutes() {
   const { isOnboarded, isLoading } = useAuth()
@@ -49,8 +50,8 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
+    <SupabaseAuthProvider>
       <AppRoutes />
-    </AuthProvider>
+    </SupabaseAuthProvider>
   )
 }
