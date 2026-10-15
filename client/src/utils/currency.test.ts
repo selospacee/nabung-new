@@ -57,10 +57,8 @@ describe('parseIDRAmount — speech/text IDR extraction (#3)', () => {
     expect(parseIDRAmount('beli 3 kopi 45000')).toBe(4_500_000)
   })
 
-  // KNOWN BUG (pending patch, verified locally): the `Rp` alternative has the /i
-  // flag but no word boundary, so the substring "rp" inside a word matches and
-  // hijacks the amount. Patch: /(?:\bRp\b|[$€£])\s*([\d.,]+)/i  ->  500_000
-  it.fails('does not treat a currency symbol letter inside a word as a prefix', () => {
+  it('does not treat a currency symbol letter inside a word as a prefix', () => {
+    // "sharp" contains the substring "rp" — must not hijack the amount
     expect(parseIDRAmount('sharp 2 5000')).toBe(500_000)
   })
 

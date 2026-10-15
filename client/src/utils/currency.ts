@@ -19,7 +19,7 @@ export function centsToDisplaySigned(cents: number, currency = 'IDR'): string {
    For bare numbers, takes the largest candidate to avoid matching stray digits. */
 export function parseIDRAmount(text: string): number | null {
   // Currency symbol prefix: "Rp 50.000", "$500", "€1.500"
-  const symbolMatch = text.match(/(?:Rp|[$€£])\s*([\d.,]+)/i)
+  const symbolMatch = text.match(/(?:\bRp\b|[$€£])\s*([\d.,]+)/i)
   if (symbolMatch) {
     return displayToCents(symbolMatch[1])
   }

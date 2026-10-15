@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import Tesseract from 'tesseract.js'
+import { displayToCents } from '../utils/currency'
 
 export interface OcrResult {
   text: string
@@ -55,9 +56,9 @@ export function useReceiptOcr() {
 
     // Find total: look for "Total", "Grand Total", "Amount Due", "Amount" near bottom
     const totalPatterns = [
-      /(?:grand\s+)?total[:\s]*([\d,]+\.?\d{0,2})/i,
-      /(?:amount\s+due|amount\s+payable|total\s+amount)[:\s]*([\d,]+\.?\d{0,2})/i,
-      /(?:total|grand\s+total)[:\s]*([\d,]+\.?\d{0,2})/i,
+      /(?:grand\s+)?total[:\s]*(?:rp\s*)?([\d][\d.,]*)/i,
+      /(?:amount\s+due|amount\s+payable|total\s+amount)[:\s]*(?:rp\s*)?([\d][\d.,]*)/i,
+      /(?:total|grand\s+total)[:\s]*(?:rp\s*)?([\d][\d.,]*)/i,
     ]
 
     let total: number | null = null
@@ -65,7 +66,8 @@ export function useReceiptOcr() {
     for (const pattern of totalPatterns) {
       const match = lower.match(pattern)
       if (match) {
-        total = Math.round(parseFloat(match[1].replace(/,/g, '')) * 100)
+        // displayToCents handles both "50.000" (ID thousands) and "50,000.00"
+        total = displayToCents(match[1])
         break
       }
     }

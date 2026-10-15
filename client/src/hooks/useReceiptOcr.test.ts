@@ -70,27 +70,10 @@ describe('useReceiptOcr — error path (#4)', () => {
     expect(result.current.isProcessing).toBe(false)
   })
 
-  // KNOWN BUG (pending patch, verified locally): parseReceiptText parses totals with
-  // its own `[\d,]+\.?\d{0,2}` regex + parseFloat, so Indonesian dot-thousands never
-  // reach displayToCents. 'Total: 50.000' -> 5_000 cents (Rp50) instead of 5_000_000.
-  // Patch: capture `([\d][\d.,]*)` and return displayToCents(match[1]).
-  const brokenTotals: Array<[string, number]> = [
+  const totalCases: Array<[string, number]> = [
+    // Indonesian dot-thousands (used to parse as Rp50 / Rp1,23 via parseFloat)
     ['Total: 50.000', 5_000_000],
     ['Grand Total: Rp 1.234.567', 123_456_700],
-  ]
-
-  for (const [line, expected] of brokenTotals) {
-    it.fails(`parses receipt total "${line}" -> ${expected} cents`, async () => {
-      recognize.mockResolvedValue({ data: { text: `TOKO ABC\n${line}`, confidence: 90 } })
-      const { result } = renderHook(() => useReceiptOcr())
-
-      const { value } = await run(result.current.recognizeReceipt)
-
-      expect(value.total).toBe(expected)
-    })
-  }
-
-  const totalCases: Array<[string, number]> = [
     ['TOTAL 45,900', 4_590_000],
     ['Amount Due: 50,000.00', 5_000_000],
     ['Total: 30.60', 3_060],
