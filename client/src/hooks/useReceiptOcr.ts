@@ -43,10 +43,10 @@ export function useReceiptOcr() {
       }
     } catch (e: any) {
       setError(e.message || 'OCR failed')
+      setProgress(0)
       throw e
     } finally {
       setIsProcessing(false)
-      setProgress(100)
     }
   }, [])
 

@@ -3,6 +3,7 @@ import type { Category } from '../types'
 import { parseISO, startOfDay } from 'date-fns'
 import { toISODate } from '../utils/dates'
 import { ID_DATE_PHRASES, DATE_PATTERNS } from '../utils/parsers'
+import { parseIDRAmount } from '../utils/currency'
 
 interface SpeechRecognitionEvent extends Event {
   resultIndex: number
@@ -75,21 +76,10 @@ export function useSpeechToText(categories: Category[]) {
     const lower = text.toLowerCase().trim()
     let remaining = text.trim()
 
-    // Extract amount
-    let amount: number | null = null
-    const amountRegex = /(\d+(?:\.\d{1,2})?)\s*(?:dollars?|dolar|usd|eur|gbp|idr)?/i
-    const amountMatch = lower.match(amountRegex)
-    if (amountMatch) {
-      amount = Math.round(parseFloat(amountMatch[1]) * 100)
-      remaining = remaining.replace(amountMatch[0], '').trim()
-    }
-
-    // Try to find amount with currency symbol
-    const curRegex = /[$€£Rp]\s*(\d+(?:\.\d{1,2})?)/i
-    const curMatch = lower.match(curRegex)
-    if (curMatch && !amount) {
-      amount = Math.round(parseFloat(curMatch[1]) * 100)
-      remaining = remaining.replace(curMatch[0], '').trim()
+    // Extract amount — use parseIDRAmount for Rp prefix + multi-group thousands
+    let amount: number | null = parseIDRAmount(text)
+    if (amount !== null) {
+      remaining = remaining.replace(/(?:Rp|[$€£])\s*[\d.,]+|[\d.,]+/g, '').trim()
     }
 
     // Extract date
