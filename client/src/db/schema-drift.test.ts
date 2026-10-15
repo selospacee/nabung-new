@@ -10,10 +10,8 @@
  * bug, and it also predates the `cashiers` table entirely.
  *
  * Live database state: the missing `updated_at` columns were added on 2026-10-15 (migration
- * `add_updated_at_to_accounts_categories_budgets_savings_goals`), so the trigger/column case
- * below is a real, passing regression guard now. `supabase-schema.sql` still reproduces the
- * old bug and still predates the `cashiers` table, so one `it.fails` remains until the
- * artifact is brought in line with the live database.
+ * `add_updated_at_to_accounts_categories_budgets_savings_goals`) and `supabase-schema.sql`
+ * was subsequently synced (commit `88430bf`). Both drift guards are now real, passing tests.
  *
  * Keep it.fails entries one-per-defect, never parametrising a mix of passing and failing
  * expectations inside a single it.fails block.
@@ -88,10 +86,7 @@ describe('supabase-schema.sql vs the live database', () => {
     expect(declaredButUnknown).toEqual([])
   })
 
-  // Still expected-fail: supabase-schema.sql has not been brought in line with the live
-  // database yet (missing the `cashiers` table, `transactions.cashier_id`, and the four
-  // `updated_at` columns added on 2026-10-15). Remove this marker once the artifact is updated.
-  it.fails('declares every table and column that exists in the live database', () => {
+  it('declares every table and column that exists in the live database', () => {
     const missingTables = Object.keys(LIVE_SCHEMA.tables).filter(t => !(t in tables))
     const missingColumns = Object.entries(LIVE_SCHEMA.tables).flatMap(([table, def]) =>
       Object.keys(def.columns)
