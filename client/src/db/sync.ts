@@ -138,11 +138,11 @@ export async function syncUserDataFromSupabase(userId: string): Promise<void> {
 // Also export function to push local changes to Supabase
 // Allowed keys per table to prevent 400 from unknown fields
 const ALLOWED_KEYS = {
-  accounts: ['id', 'user_id', 'name', 'type', 'currency', 'icon', 'color', 'created_at'],
-  categories: ['id', 'user_id', 'name', 'type', 'icon', 'color', 'parent_id', 'sort_order', 'merchant_patterns'],
+  accounts: ['id', 'user_id', 'name', 'type', 'currency', 'icon', 'color', 'created_at', 'updated_at'],
+  categories: ['id', 'user_id', 'name', 'type', 'icon', 'color', 'parent_id', 'sort_order', 'merchant_patterns', 'updated_at'],
   transactions: ['id', 'user_id', 'account_id', 'category_id', 'cashier_id', 'amount', 'currency', 'type', 'date', 'description', 'merchant', 'notes', 'receipt_image', 'receipt_ocr_text', 'location', 'latitude', 'longitude', 'created_at', 'updated_at', 'deleted_at'],
-  budgets: ['id', 'user_id', 'category_id', 'year_month', 'limit_amount', 'alert_threshold', 'rollover', 'created_at'],
-  savings_goals: ['id', 'user_id', 'name', 'target_amount', 'current_amount', 'target_date', 'color', 'icon', 'created_at'],
+  budgets: ['id', 'user_id', 'category_id', 'year_month', 'limit_amount', 'alert_threshold', 'rollover', 'created_at', 'updated_at'],
+  savings_goals: ['id', 'user_id', 'name', 'target_amount', 'current_amount', 'target_date', 'color', 'icon', 'created_at', 'updated_at'],
   cashiers: ['id', 'user_id', 'name', 'email', 'phone', 'role', 'cup_commission', 'base_salary', 'is_active', 'merchant_name', 'created_at', 'updated_at'],
 }
 

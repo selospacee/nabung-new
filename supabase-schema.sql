@@ -9,7 +9,7 @@ CREATE TABLE profiles (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   email TEXT NOT NULL,
   name TEXT NOT NULL,
-  currency TEXT DEFAULT 'USD',
+  currency TEXT DEFAULT 'IDR',
   timezone TEXT DEFAULT 'UTC',
   theme TEXT DEFAULT 'dark' CHECK (theme IN ('dark', 'light', 'system')),
   default_account_id UUID,
@@ -25,20 +25,21 @@ CREATE TABLE user_settings (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Accounts
+|-- Accounts
 CREATE TABLE accounts (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   name TEXT NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('cash', 'bank', 'credit', 'investment')),
   balance DECIMAL(15, 2) DEFAULT 0,
-  currency TEXT DEFAULT 'USD',
+  currency TEXT DEFAULT 'IDR',
   icon TEXT,
   color TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Categories
+|-- Categories
 CREATE TABLE categories (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -49,7 +50,8 @@ CREATE TABLE categories (
   parent_id UUID REFERENCES categories(id) ON DELETE SET NULL,
   sort_order INTEGER DEFAULT 0,
   merchant_patterns TEXT[] DEFAULT '{}',
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Transactions
@@ -58,8 +60,9 @@ CREATE TABLE transactions (
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   account_id UUID REFERENCES accounts(id) ON DELETE CASCADE NOT NULL,
   category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
+  cashier_id UUID REFERENCES cashiers(id) ON DELETE SET NULL,
   amount DECIMAL(15, 2) NOT NULL,
-  currency TEXT DEFAULT 'USD',
+  currency TEXT DEFAULT 'IDR',
   type TEXT NOT NULL CHECK (type IN ('income', 'expense', 'transfer')),
   date TIMESTAMPTZ NOT NULL,
   description TEXT,
@@ -75,7 +78,7 @@ CREATE TABLE transactions (
   deleted_at TIMESTAMPTZ
 );
 
--- Budgets
+|-- Budgets
 CREATE TABLE budgets (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -85,10 +88,11 @@ CREATE TABLE budgets (
   alert_threshold DECIMAL(3, 2) DEFAULT 0.8,
   rollover BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(user_id, category_id, year_month)
 );
 
--- Savings Goals
+|-- Savings Goals
 CREATE TABLE savings_goals (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -98,7 +102,24 @@ CREATE TABLE savings_goals (
   target_date DATE NOT NULL,
   color TEXT,
   icon TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+|-- Cashiers
+CREATE TABLE cashiers (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  name TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  role TEXT NOT NULL DEFAULT 'cashier' CHECK (role IN ('cashier', 'admin', 'manager')),
+  cup_commission DECIMAL(10, 2) DEFAULT 0,
+  base_salary DECIMAL(12, 2) DEFAULT 0,
+  is_active BOOLEAN DEFAULT TRUE,
+  merchant_name TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Enable Row Level Security
@@ -109,8 +130,9 @@ ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE budgets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE savings_goals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cashiers ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies
+|-- RLS Policies
 -- Profiles
 CREATE POLICY "Users can view own profile" ON profiles FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
@@ -151,12 +173,19 @@ CREATE POLICY "Users can insert own goals" ON savings_goals FOR INSERT WITH CHEC
 CREATE POLICY "Users can update own goals" ON savings_goals FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can delete own goals" ON savings_goals FOR DELETE USING (auth.uid() = user_id);
 
--- Indexes for performance
+|-- Cashiers
+CREATE POLICY "Users can view own cashiers" ON cashiers FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own cashiers" ON cashiers FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own cashiers" ON cashiers FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own cashiers" ON cashiers FOR DELETE USING (auth.uid() = user_id);
+
+|-- Indexes for performance
 CREATE INDEX idx_transactions_user_date ON transactions(user_id, date DESC);
 CREATE INDEX idx_transactions_account ON transactions(account_id);
 CREATE INDEX idx_transactions_category ON transactions(category_id);
 CREATE INDEX idx_budgets_user_month ON budgets(user_id, year_month);
 CREATE INDEX idx_categories_user_type ON categories(user_id, type);
+CREATE INDEX idx_cashiers_user_active ON cashiers(user_id, is_active);
 
 -- Trigger to update updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -174,6 +203,7 @@ CREATE TRIGGER update_categories_updated_at BEFORE UPDATE ON categories FOR EACH
 CREATE TRIGGER update_transactions_updated_at BEFORE UPDATE ON transactions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_budgets_updated_at BEFORE UPDATE ON budgets FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_savings_goals_updated_at BEFORE UPDATE ON savings_goals FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_cashiers_updated_at BEFORE UPDATE ON cashiers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Function to create profile on signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -184,7 +214,7 @@ BEGIN
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'name', NEW.email),
-    COALESCE(NEW.raw_user_meta_data->>'currency', 'USD'),
+    COALESCE(NEW.raw_user_meta_data->>'currency', 'IDR'),
     COALESCE(NEW.raw_user_meta_data->>'timezone', 'UTC'),
     'dark'
   );
