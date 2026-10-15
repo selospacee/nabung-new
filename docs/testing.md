@@ -75,8 +75,11 @@ green while the bug is tracked. They flip to a loud failure the moment the fix l
 is the point: it forces the marker's removal. Keep one defect per `it.fails` block; never
 parametrise a mix of passing and failing expectations inside one.
 
-Current expected-fail cases: `src/db/schema-drift.test.ts` (2) — both are resolved by the
-migration in `docs/bug-accounts-upsert-400.md`.
+Current expected-fail cases: **1** — `src/db/schema-drift.test.ts` "declares every table and
+column that exists in the live database", which stays red until `supabase-schema.sql` is
+brought in line with the live database (missing `cashiers`, `transactions.cashier_id`, and the
+four `updated_at` columns added on 2026-10-15). The trigger/column case in the same file was
+released from `it.fails` by that migration and is now a real passing regression guard.
 
 ## Known pre-existing tsc errors
 

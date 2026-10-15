@@ -1,7 +1,7 @@
 # Root cause: `POST /rest/v1/accounts` → 400 (SQLSTATE 42703)
 
-Status: **confirmed against the live database and the production log.** Fix not yet applied
-(schema change — belongs to the migration owner).
+Status: **FIXED — migration applied and verified 2026-10-15** (see *Applied / verification* at
+the bottom). Root cause confirmed against the live database and the production log.
 
 ## Symptom
 
@@ -112,10 +112,50 @@ Also fix the artifact so it stops re-creating the bug:
   in `client/src/db/sync.ts` if the client is expected to send it (it is currently stripped,
   so the column will always be server-set — that is fine, just be explicit).
 
-## After the migration
+## Applied / verification (2026-10-15)
 
-- `client/src/db/schema-drift.test.ts` has two `it.fails` cases that flip to failures once the
-  schema is fixed — remove the `it.fails` markers then.
-- Re-run the push contract suite: `cd client && npx vitest run`.
-- A full signup + "edit an existing account" round trip should then produce `200`/`201` on
-  `/rest/v1/accounts` with no `proxy_status: PostgREST; error=…`.
+Migration `add_updated_at_to_accounts_categories_budgets_savings_goals` applied to project
+`lyhemujxjphuyohyckvw`:
+
+```sql
+alter table public.accounts      add column if not exists updated_at timestamptz default now();
+alter table public.categories    add column if not exists updated_at timestamptz default now();
+alter table public.budgets       add column if not exists updated_at timestamptz default now();
+alter table public.savings_goals add column if not exists updated_at timestamptz default now();
+```
+
+Verified:
+
+1. **Trigger/column matrix is clean** — every table carrying `update_updated_at_column` now
+   has `updated_at` (`accounts`, `budgets`, `categories`, `profiles`, `savings_goals`,
+   `transactions`, `user_settings`); `cashiers` has the column but no trigger.
+2. **The exact statement that used to 400 now returns a row.** Replaying the PostgREST upsert
+   shape from the failure log against the same account (`4bbd0575-…`, user `48fba103-…`):
+
+   ```sql
+   insert into public.accounts (id, user_id, name, type, currency, icon, color, created_at)
+   values ('4bbd0575-…','48fba103-…','Cash','cash','IDR','Wallet','#10B981','2026-10-15T09:33:37.282Z')
+   on conflict (id) do update set … returning id, name, type, updated_at;
+   -- -> 1 row: updated_at bumped by the trigger (no 42703)
+   ```
+
+   Note: this proves the trigger path. RLS is not exercised by it (the SQL ran with elevated
+   privileges), and the browser request still carries the user's own JWT.
+3. **Test suite:** `cd client && npx vitest run` → 73 passed + 1 expected fail. The former
+   `it.fails` "attaches the updated_at trigger only to tables that have the column" is now a
+   real passing regression guard (proven red-capable: removing the column from the snapshot
+   fails it).
+
+## Remaining work (schema artifact only)
+
+`supabase-schema.sql` is still stale — it reproduces the old bug and predates `cashiers`. Until
+it is updated, one `it.fails` stays in `client/src/db/schema-drift.test.ts`:
+
+- declare `updated_at` on `accounts`, `categories`, `budgets`, `savings_goals` **or** stop
+  creating the triggers there;
+- add the `cashiers` table and `transactions.cashier_id` (the live database has both);
+- optionally add `updated_at` to `ALLOWED_KEYS.accounts/categories/budgets/savings_goals` in
+  `client/src/db/sync.ts` — it is currently stripped, so the column is always server-set.
+  That is fine; just be explicit about it.
+
+Then remove the remaining `it.fails` marker and re-run `cd client && npx vitest run`.
