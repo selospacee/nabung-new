@@ -1,9 +1,11 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import type { Category } from '../types'
 import { parseISO, startOfDay } from 'date-fns'
 import { toISODate } from '../utils/dates'
 import { ID_DATE_PHRASES, DATE_PATTERNS } from '../utils/parsers'
 import { parseIDRAmount } from '../utils/currency'
+import { parseVoiceWithAI, isAIAvailable } from '../lib/aiParser'
+import { useSupabaseAuth } from '../auth/SupabaseAuthContext'
 
 interface SpeechRecognitionEvent extends Event {
   resultIndex: number
@@ -57,6 +59,8 @@ export interface SpeechToTextResult {
 }
 
 export function useSpeechToText(categories: Category[]) {
+  const { user } = useSupabaseAuth()
+  const currency = user?.currency || 'IDR'
   const [isListening, setIsListening] = useState(false)
   const [aiParsing, setAiParsing] = useState(false)
   const [transcript, setTranscript] = useState('')
@@ -72,6 +76,7 @@ export function useSpeechToText(categories: Category[]) {
     longitude: null,
   })
   const [error, setError] = useState<string | null>(null)
+  const [selectedLang, setSelectedLang] = useState<'id-ID' | 'en-US'>(currency === 'IDR' ? 'id-ID' : 'en-US')
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const transcriptRef = useRef('')
 
@@ -208,9 +213,9 @@ export function useSpeechToText(categories: Category[]) {
     }
 
     const recognition = new SpeechRecognitionAPI()
-    recognition.continuous = true
-    recognition.interimResults = true
-    recognition.lang = 'en-US'
+        recognition.continuous = true
+        recognition.interimResults = true
+        recognition.lang = selectedLang
 
     recognitionRef.current = recognition
     setIsListening(true)
@@ -273,14 +278,16 @@ export function useSpeechToText(categories: Category[]) {
     return {
       isListening,
       aiParsing,
-      transcript,
-      parsed,
-      error,
-      startListening,
-      stopListening,
-      clearTranscript,
-      supportsSpeech: !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition),
-    }
-}
+            transcript,
+            parsed,
+            error,
+            startListening,
+            stopListening,
+            clearTranscript,
+            supportsSpeech: !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition),
+            selectedLang,
+            setSelectedLang,
+          }
+      }
 
 export type UseSpeechToTextReturn = ReturnType<typeof useSpeechToText>

@@ -935,14 +935,23 @@ export function TransactionsPage() {
               </div>
 
               {/* Transcript */}
-              {voiceCtx.transcript && (
-                <div className="p-3 rounded-lg bg-secondary text-sm">
-                  <span className="text-muted-foreground">Transcript: </span>
-                  <span>{voiceCtx.transcript}</span>
-                </div>
-              )}
+                            {voiceCtx.transcript && (
+                              <div className="p-3 rounded-lg bg-secondary text-sm">
+                                <span className="text-muted-foreground">Transcript: </span>
+                                <span>{voiceCtx.transcript}</span>
+                              </div>
+                            )}
 
-              {voiceCtx.error && (
+                            {/* Language selector */}
+                            <div className="flex items-center gap-2">
+                              <label className="text-sm text-muted-foreground">Language:</label>
+                              <Select value={voiceCtx.selectedLang} onChange={e => voiceCtx.setSelectedLang(e.target.value as 'id-ID' | 'en-US')}>
+                                <option value="id-ID">Indonesia (id-ID)</option>
+                                <option value="en-US">English (en-US)</option>
+                              </Select>
+                            </div>
+
+                            {voiceCtx.error && (
                               <Alert variant="destructive">{voiceCtx.error}</Alert>
                             )}
 
