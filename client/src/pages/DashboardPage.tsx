@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react'
-import { useCurrentUser, useTransactions, useAccounts, useCategories, useDefaultAccount, computeMonthlyStats, computeMonthlyTrend } from '../db/hooks'
+import { useMemo, useState, useEffect } from 'react'
+import { useSupabaseAuth } from '../auth/SupabaseAuthContext'
+import { useCurrentUser, useTransactions, useAccounts, useCategories, useDefaultAccount, useAccountBalances, computeMonthlyStats, computeMonthlyTrend } from '../db/hooks'
 import { useIncomeCategories, useExpenseCategories } from '../db/hooks'
+import { syncUserDataFromSupabase } from '../db/sync'
 import { cn, Card, CardHeader, CardTitle, CardContent, Button, Badge, Progress, EmptyState, Skeleton } from '../components/ui'
 import { formatCurrency, centsToDisplay } from '../utils/currency'
 import { toISODate, formatDate, toYearMonth } from '../utils/dates'
@@ -13,6 +15,7 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { useNavigate } from 'react-router-dom'
 
 export function DashboardPage() {
+  const { user: authUser } = useSupabaseAuth()
   const { user } = useCurrentUser()
   const accounts = useAccounts()
   const categories = useCategories()
@@ -21,7 +24,17 @@ export function DashboardPage() {
   const defaultAccount = useDefaultAccount()
 
   const [selectedMonth, setSelectedMonth] = useState(toYearMonth(new Date()))
+  const [isSyncing, setIsSyncing] = useState(false)
   const navigate = useNavigate()
+
+  // Sync data from Supabase on mount
+  useEffect(() => {
+    if (authUser?.id) {
+      setIsSyncing(true)
+      syncUserDataFromSupabase(authUser.id)
+        .finally(() => setIsSyncing(false))
+    }
+  }, [authUser?.id])
 
   const monthRange = useMemo(() => {
     // Ensure selectedMonth is valid (YYYY-MM format)
@@ -39,10 +52,11 @@ export function DashboardPage() {
   }, [selectedMonth])
 
   const { user: u } = useCurrentUser()
-  const currency = user?.currency || 'USD'
+  const currency = user?.currency || 'IDR'
   const userId = u?.id
   const transactions = useTransactions(userId, { startDate: monthRange.start, endDate: monthRange.end })
   const allTransactions = useTransactions(userId)
+  const balances = useAccountBalances(userId)
 
   const stats = useMemo(() => {
     if (!transactions) return null
@@ -73,8 +87,8 @@ export function DashboardPage() {
 
   const totalBalance = useMemo(() => {
     if (!accounts) return 0
-    return accounts.reduce((sum, a) => sum + a.balance, 0)
-  }, [accounts])
+    return accounts.reduce((sum, a) => sum + (balances[a.id] || 0), 0)
+  }, [accounts, balances])
 
   const prevMonth = () => {
     const d = new Date(selectedMonth + '-01')
@@ -90,8 +104,9 @@ export function DashboardPage() {
 
   const isCurrentMonth = selectedMonth === toYearMonth(new Date())
 
-  // Empty state
-  if (!transactions || transactions.length === 0) {
+    // Empty state — only show after data has finished loading and sync is complete
+    const hasLoaded = transactions !== undefined && categories !== undefined && !isSyncing
+    if (hasLoaded && (!transactions || transactions.length === 0)) {
     return (
       <div className="space-y-6">
         <EmptyState
@@ -135,52 +150,52 @@ export function DashboardPage() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 sm:gap-4">
+        <Card className="min-w-0">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Balance</CardTitle>
             <Wallet className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-foreground font-mono">
+            <div className="text-2xl font-bold text-foreground font-mono truncate">
               {formatCurrency(totalBalance, currency)}
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="min-w-0">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Income</CardTitle>
             <TrendingUp className="w-4 h-4 text-income" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-income font-mono">
+            <div className="text-2xl font-bold text-income font-mono truncate">
               {stats ? formatCurrency(stats.income, currency) : '-$'}
             </div>
             {stats && <p className="text-xs text-muted-foreground mt-1">{stats.count} transactions</p>}
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="min-w-0">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Expenses</CardTitle>
             <TrendingDown className="w-4 h-4 text-expense" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-expense font-mono">
+            <div className="text-2xl font-bold text-expense font-mono truncate">
               {stats ? formatCurrency(stats.expense, currency) : '-$'}
             </div>
             {stats && <p className="text-xs text-muted-foreground mt-1">{stats.count} transactions</p>}
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="min-w-0">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Net</CardTitle>
             <BarChart3 className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold font-mono ${
+            <div className={`text-2xl font-bold font-mono truncate ${
               stats && stats.net >= 0 ? 'text-success' : 'text-expense'
             }`}>
               {stats ? formatCurrency(stats.net, currency) : '-$'}

@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useCurrentUser } from '../db/hooks'
-import { useAccounts } from '../db/hooks'
+import { useAccounts, useAccountBalances } from '../db/hooks'
 import { db } from '../db'
+import { pushLocalChangesToSupabase } from '../db/sync'
 import { v4 as uuid } from 'uuid'
 import { cn, Card, CardHeader, CardTitle, CardContent, Button, Badge, Dialog, Input, Select, EmptyState } from '../components/ui'
 import { formatCurrency } from '../utils/currency'
@@ -24,78 +25,82 @@ const ACCOUNT_COLORS: Record<string, string> = {
 export function AccountsPage() {
   const { user, userId } = useCurrentUser()
   const accounts = useAccounts(userId)
+  const balances = useAccountBalances(userId)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState({
     name: '',
     type: 'cash' as 'cash' | 'bank' | 'credit' | 'investment',
-    balance: '',
     color: '#6366F1',
     icon: 'Wallet',
   })
   const [saving, setSaving] = useState(false)
 
-  const currency = user?.currency || 'USD'
+  const currency = user?.currency || 'IDR'
+
+  const accountsWithBalance = useMemo(() => {
+    return (accounts || []).map(a => ({ ...a, balance: balances[a.id] || 0 }))
+  }, [accounts, balances])
 
   const totalBalance = useMemo(() => {
-    return (accounts || []).reduce((sum, a) => sum + a.balance, 0)
-  }, [accounts])
+    return accountsWithBalance.reduce((sum, a) => sum + a.balance, 0)
+  }, [accountsWithBalance])
 
   const resetForm = (account?: any) => {
-    if (account) {
-      setForm({
-        name: account.name,
-        type: account.type,
-        balance: String(account.balance / 100),
-        color: account.color,
-        icon: account.icon,
-      })
-      setEditingId(account.id)
-    } else {
-      setForm({ name: '', type: 'cash', balance: '', color: '#6366F1', icon: 'Wallet' })
-      setEditingId(null)
+      if (account) {
+        setForm({
+          name: account.name,
+          type: account.type,
+          color: account.color,
+          icon: account.icon,
+        })
+        setEditingId(account.id)
+      } else {
+        setForm({ name: '', type: 'cash', color: '#6366F1', icon: 'Wallet' })
+        setEditingId(null)
+      }
+      setShowForm(true)
     }
-    setShowForm(true)
-  }
 
   const submitForm = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const balanceCents = Math.round(parseFloat(form.balance) * 100) || 0
+      e.preventDefault()
 
-    setSaving(true)
-    try {
-      const now = new Date().toISOString()
-      if (editingId) {
-        await db.accounts.update(editingId, {
-          name: form.name,
-          type: form.type,
-          balance: balanceCents,
-          color: form.color,
-          icon: form.icon,
-        })
-      } else {
-        await db.accounts.add({
-          id: uuid(),
-          userId: userId || '',
-          name: form.name,
-          type: form.type,
-          balance: balanceCents,
-          currency,
-          color: form.color,
-          icon: form.icon,
-          createdAt: now,
-        })
+      setSaving(true)
+      try {
+        const now = new Date().toISOString()
+        if (editingId) {
+          await db.accounts.update(editingId, {
+            name: form.name,
+            type: form.type,
+            color: form.color,
+            icon: form.icon,
+          })
+        } else {
+          await db.accounts.add({
+            id: uuid(),
+            userId: userId || '',
+            name: form.name,
+            type: form.type,
+            currency,
+            color: form.color,
+            icon: form.icon,
+            createdAt: now,
+          })
+        }
+        setShowForm(false)
+      } finally {
+        setSaving(false)
       }
-      setShowForm(false)
-    } finally {
-      setSaving(false)
+      // Push to Supabase
+      await pushLocalChangesToSupabase(userId || '')
     }
-  }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this account? Its transactions will not be deleted.')) return
-    await db.accounts.delete(id)
-  }
+      if (!confirm('Delete this account? Its transactions will not be deleted.')) return
+      await db.accounts.delete(id)
+      // Push to Supabase
+      await pushLocalChangesToSupabase(userId || '')
+    }
 
   if (!accounts) {
     return (
@@ -157,50 +162,50 @@ export function AccountsPage() {
         />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {accounts.map(account => {
-            const TypeIcon = ACCOUNT_TYPES.find(t => t.value === account.type)?.icon || Wallet
-            const isOverdraft = account.type === 'credit' && account.balance < 0
+          {accountsWithBalance.map(account => {
+                      const TypeIcon = ACCOUNT_TYPES.find(t => t.value === account.type)?.icon || Wallet
+                      const isOverdraft = account.type === 'credit' && account.balance < 0
 
-            return (
-              <Card key={account.id} className="group">
-                <CardContent className="pt-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg flex items-center justify-center"
-                        style={{ backgroundColor: (ACCOUNT_COLORS[account.type] || '#6B7280') + '20' }}>
-                        <TypeIcon className="w-5 h-5" style={{ color: ACCOUNT_COLORS[account.type] || '#6B7280' }} />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-foreground">{account.name}</h3>
-                        <Badge variant="secondary" className="text-xs capitalize mt-0.5">
-                          {account.type}
-                        </Badge>
-                      </div>
-                    </div>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => resetForm(account)}>
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(account.id)}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  </div>
+                      return (
+                        <Card key={account.id} className="group">
+                          <CardContent className="pt-6">
+                            <div className="flex items-start justify-between mb-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-lg flex items-center justify-center"
+                                  style={{ backgroundColor: (ACCOUNT_COLORS[account.type] || '#6B7280') + '20' }}>
+                                  <TypeIcon className="w-5 h-5" style={{ color: ACCOUNT_COLORS[account.type] || '#6B7280' }} />
+                                </div>
+                                <div>
+                                  <h3 className="font-semibold text-foreground">{account.name}</h3>
+                                  <Badge variant="secondary" className="text-xs capitalize mt-0.5">
+                                    {account.type}
+                                  </Badge>
+                                </div>
+                              </div>
+                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => resetForm(account)}>
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(account.id)}>
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            </div>
 
-                  <p className={cn(
-                    'text-2xl font-bold font-mono',
-                    isOverdraft ? 'text-expense' : 'text-foreground'
-                  )}>
-                    {isOverdraft ? '-' : ''}{formatCurrency(account.balance, currency)}
-                  </p>
+                            <p className={cn(
+                              'text-2xl font-bold font-mono',
+                              isOverdraft ? 'text-expense' : 'text-foreground'
+                            )}>
+                              {isOverdraft ? '-' : ''}{formatCurrency(account.balance, currency)}
+                            </p>
 
-                  {account.type === 'credit' && account.balance < 0 && (
-                    <p className="text-xs text-warning mt-1">Overdraft</p>
-                  )}
-                </CardContent>
-              </Card>
-            )
-          })}
+                            {account.type === 'credit' && account.balance < 0 && (
+                              <p className="text-xs text-warning mt-1">Overdraft</p>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
         </div>
       )}
 
@@ -240,19 +245,10 @@ export function AccountsPage() {
                 </div>
               </div>
 
-              <Input
-                label="Balance"
-                type="text"
-                inputMode="decimal"
-                value={form.balance}
-                onChange={e => setForm(f => ({ ...f, balance: e.target.value }))}
-                placeholder="0.00"
-              />
-
               {/* Color picker */}
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Color</label>
-                <div className="flex gap-2 flex-wrap">
+                            <div className="space-y-1">
+                              <label className="text-sm font-medium">Color</label>
+                              <div className="flex gap-2 flex-wrap">
                   {['#6366F1', '#10B981', '#F59E0B', '#EC4899', '#06B6D4', '#8B5CF6', '#F97316', '#6B7280'].map(color => (
                     <button
                       key={color}

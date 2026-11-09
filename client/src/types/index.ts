@@ -16,7 +16,6 @@ export interface Account {
   userId: string
   name: string
   type: 'cash' | 'bank' | 'credit' | 'investment'
-  balance: number
   currency: string
   icon: string
   color: string
@@ -35,11 +34,27 @@ export interface Category {
   merchantPatterns: string[]
 }
 
+export interface Cashier {
+  id: string
+  userId: string
+  name: string
+  email: string | null
+  phone: string | null
+  role: 'cashier' | 'admin' | 'manager'
+  cupCommission: number
+  baseSalary: number
+  isActive: boolean
+  merchantName: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export interface Transaction {
   id: string
   userId: string
   accountId: string
   categoryId: string | null
+  cashierId: string | null
   amount: number
   currency: string
   type: 'income' | 'expense' | 'transfer'

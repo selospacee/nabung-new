@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useAuth } from '../auth/AuthContext'
+import { useSupabaseAuth } from '../auth/SupabaseAuthContext'
 import { Button } from '../components/ui'
 import { Input, Select } from '../components/ui'
 import { DollarSign, Globe, Clock, Mail, User, Loader2 } from 'lucide-react'
@@ -31,12 +31,12 @@ const TIMEZONES = [
 ].sort()
 
 export function OnboardingPage() {
-  const { login, signUp, isLoading } = useAuth()
+  const { login, signUp, isLoading } = useSupabaseAuth()
   const [mode, setMode] = useState<'login' | 'signUp'>('signUp')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
-  const [currency, setCurrency] = useState('USD')
+  const [currency, setCurrency] = useState('IDR')
   const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -50,25 +50,31 @@ export function OnboardingPage() {
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
-    try {
-      if (mode === 'login') {
-        if (!email.trim()) { setError('Email is required'); return }
-        if (!password) { setError('Password is required'); return }
-        await login(email.trim(), password)
-      } else {
-        if (!name.trim()) { setError('Name is required'); return }
-        if (!email.trim()) { setError('Email is required'); return }
-        if (!password) { setError('Password is required'); return }
-        await signUp(email.trim(), password, name.trim(), currency, timezone)
+      e.preventDefault()
+      console.log('[Onboarding] Submit:', mode)
+      setError('')
+      setLoading(true)
+      try {
+        if (mode === 'login') {
+          if (!email.trim()) { setError('Email is required'); setLoading(false); return }
+          if (!password) { setError('Password is required'); setLoading(false); return }
+          console.log('[Onboarding] Calling login...')
+          await login(email.trim(), password)
+          console.log('[Onboarding] Login returned, isLoading should be false now')
+        } else {
+          if (!name.trim()) { setError('Name is required'); setLoading(false); return }
+          if (!email.trim()) { setError('Email is required'); setLoading(false); return }
+          if (!password) { setError('Password is required'); setLoading(false); return }
+          console.log('[Onboarding] Calling signUp...')
+          await signUp(email.trim(), password, name.trim(), currency, timezone)
+          console.log('[Onboarding] SignUp returned, isLoading should be false now')
+        }
+      } catch (err: any) {
+        console.error('[Onboarding] Error:', err)
+        setError(err.message || 'Failed to authenticate')
+        setLoading(false)
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to authenticate')
-      setLoading(false)
     }
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">

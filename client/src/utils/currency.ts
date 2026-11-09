@@ -40,7 +40,9 @@ export function displayToCents(str: string, currency = 'IDR'): number | null {
   const cleaned = str.replace(/[^0-9.,\-]/g, '')
   if (!cleaned) return null
 
-  // Distinguish Indonesian thousands separator from decimal point
+  // For IDR: dots are thousands separators, comma is decimal (rare)
+  // For USD/EUR/etc: comma is thousands separator, dot is decimal
+  const isIDR = currency === 'IDR'
   const hasDot = cleaned.includes('.')
   const hasComma = cleaned.includes(',')
 
@@ -55,21 +57,32 @@ export function displayToCents(str: string, currency = 'IDR'): number | null {
       numStr = cleaned.replace(/,/g, '')
     }
   } else if (hasDot && !hasComma) {
-      // Only dots. If every group after the first has exactly 3 digits → Indonesian thousands
+    // Only dots present
+    if (isIDR) {
+      // IDR: dots are thousands separators ("30.600" → 30600)
       const parts = cleaned.split('.')
       if (parts.slice(1).every(p => p.length === 3)) {
-        // Indonesian thousands: "1.500.000" → 1500000, "12.345.678" → 12345678
         numStr = parts.join('')
       } else {
-        // Western decimal: "30.60" → 30.6
+        // Fallback: treat as decimal if groups aren't 3 digits
         numStr = cleaned
       }
-    } else if (hasComma && !hasDot) {
-    const parts = cleaned.split(',')
-    if (parts.length === 2 && parts[1].length <= 2) {
-      numStr = cleaned.replace(',', '.')
     } else {
+      // Other currencies: dot is decimal separator
+      numStr = cleaned
+    }
+  } else if (hasComma && !hasDot) {
+    // Only commas present
+    if (isIDR) {
+      // IDR rarely uses commas, but if present treat as thousands
       numStr = cleaned.replace(/,/g, '')
+    } else {
+      const parts = cleaned.split(',')
+      if (parts.length === 2 && parts[1].length <= 2) {
+        numStr = cleaned.replace(',', '.')
+      } else {
+        numStr = cleaned.replace(/,/g, '')
+      }
     }
   } else {
     numStr = cleaned

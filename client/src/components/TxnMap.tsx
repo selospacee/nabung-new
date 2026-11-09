@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { formatCurrency } from '../utils/currency'
+import type { LatLngExpression } from 'leaflet'
 
 interface LocatedTxn {
   id: string
@@ -44,7 +45,7 @@ export function TxnMap({ locatedTxns, bounds, mapProvider, currency }: TxnMapPro
       tx.latitude !== null && tx.longitude !== null
   )
 
-  const center: [number, number] = [(bounds.minLat + bounds.maxLat) / 2, (bounds.minLng + bounds.maxLng) / 2]
+  const center: LatLngExpression = [(bounds.minLat + bounds.maxLat) / 2, (bounds.minLng + bounds.maxLng) / 2]
 
   return (
     <MapContainer

@@ -53,6 +53,14 @@ export function isDateToday(dateStr: string): boolean {
   return isToday(parseISO(dateStr))
 }
 
+/** Get start and end dates for a year-month string (YYYY-MM) */
+export function getYearMonthRange(yearMonth: string) {
+  const [year, month] = yearMonth.split('-').map(Number)
+  const start = new Date(year, month - 1, 1)
+  const end = new Date(year, month, 0, 23, 59, 59)
+  return { startDate: toISODate(start), endDate: toISODate(end) }
+}
+
 /** Relative time description */
 export function relativeDate(dateStr: string): string {
   try {

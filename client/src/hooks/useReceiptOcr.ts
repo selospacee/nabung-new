@@ -8,11 +8,13 @@ export interface OcrResult {
   merchant: string | null
   total: number | null
   date: string | null
+  suggestedType: 'income' | 'expense' | 'transfer'
   rawLines: string[]
 }
 
 export function useReceiptOcr() {
   const [isProcessing, setIsProcessing] = useState(false)
+  const [aiParsing, setAiParsing] = useState(false)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
@@ -31,12 +33,14 @@ export function useReceiptOcr() {
       })
 
       const rawText = result.data.text
-      const rawLines = rawText.split('\n').filter(l => l.trim().length > 0)
+            const rawLines = rawText.split('\n').filter(l => l.trim().length > 0)
 
-      // Parse merchant, total, date
-      const parsed = parseReceiptText(rawText, rawLines)
+            // Parse merchant, total, date
+            const parsed = parseReceiptText(rawText, rawLines)
 
-      return {
+            setProgress(100)
+
+            return {
         text: rawText,
         confidence: result.data.confidence,
         ...parsed,
@@ -51,7 +55,7 @@ export function useReceiptOcr() {
     }
   }, [])
 
-  const parseReceiptText = (text: string, lines: string[]): { merchant: string | null; total: number | null; date: string | null } => {
+  const parseReceiptText = (text: string, lines: string[]): { merchant: string | null; total: number | null; date: string | null; suggestedType: 'income' | 'expense' | 'transfer' } => {
     const lower = text.toLowerCase()
 
     // Find total: look for "Total", "Grand Total", "Amount Due", "Amount" near bottom
@@ -130,15 +134,16 @@ export function useReceiptOcr() {
       }
     }
 
-    return { merchant, total, date }
+    return { merchant, total, date, suggestedType: 'expense' as const }
   }
 
   return {
-    isProcessing,
-    progress,
-    error,
-    recognizeReceipt,
-  }
+      isProcessing,
+      aiParsing,
+      progress,
+      error,
+      recognizeReceipt,
+    }
 }
 
 export type UseReceiptOcrReturn = ReturnType<typeof useReceiptOcr>

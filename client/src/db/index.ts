@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie'
-import type { User, Account, Category, Transaction, Budget, SavingsGoal } from '../types'
+import type { User, Account, Category, Transaction, Budget, SavingsGoal, Cashier } from '../types'
 
 class NabungDB extends Dexie {
   users!: Table<User, string>
@@ -8,16 +8,18 @@ class NabungDB extends Dexie {
   transactions!: Table<Transaction, string>
   budgets!: Table<Budget, string>
   goals!: Table<SavingsGoal, string>
+  cashiers!: Table<Cashier, string>
 
   constructor() {
     super('nabung-db')
-    this.version(2).stores({
+    this.version(3).stores({
       users: 'id, email',
       accounts: 'id, userId, type',
       categories: 'id, userId, type, parentId',
-      transactions: 'id, userId, accountId, categoryId, date, type, deletedAt, latitude, longitude',
+      transactions: 'id, userId, accountId, categoryId, cashierId, date, type, deletedAt, latitude, longitude',
       budgets: 'id, userId, categoryId, yearMonth',
       goals: 'id, userId',
+      cashiers: 'id, userId, isActive',
     })
   }
 }

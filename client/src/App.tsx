@@ -1,19 +1,19 @@
-import { AuthProvider } from './auth/AuthContext'
 import { AppShell } from './components/layout/AppShell'
 import { Routes, Route } from 'react-router-dom'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { TransactionsPage } from './pages/TransactionsPage'
 import { AccountsPage } from './pages/AccountsPage'
-import { CategoriesPage } from './pages/CategoriesPage'
 import { BudgetsPage } from './pages/BudgetsPage'
 import { ReportsPage } from './pages/ReportsPage'
 import { SettingsPage } from './pages/SettingsPage'
-import { useAuth } from './auth/AuthContext'
+import { useSupabaseAuth } from './auth/SupabaseAuthContext'
 import { SupabaseAuthProvider } from './auth/SupabaseAuthContext'
 
 function AppRoutes() {
-  const { isOnboarded, isLoading } = useAuth()
+  const { isOnboarded, isLoading, user } = useSupabaseAuth()
+
+  console.log('[AppRoutes] Render:', { isLoading, isOnboarded, user: user?.id })
 
   if (isLoading) {
     return (
@@ -29,23 +29,24 @@ function AppRoutes() {
   }
 
   if (!isOnboarded) {
+    console.log('[AppRoutes] Showing OnboardingPage')
     return <OnboardingPage />
   }
 
+  console.log('[AppRoutes] Showing Dashboard')
   return (
-    <AppShell>
-      <Routes>
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/transactions" element={<TransactionsPage />} />
-        <Route path="/transactions/new" element={<TransactionsPage />} />
-        <Route path="/accounts" element={<AccountsPage />} />
-        <Route path="/categories" element={<CategoriesPage />} />
-        <Route path="/budgets" element={<BudgetsPage />} />
-        <Route path="/reports" element={<ReportsPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-      </Routes>
-    </AppShell>
-  )
+      <AppShell>
+        <Routes>
+                        <Route path="/" element={<DashboardPage />} />
+                        <Route path="/transactions" element={<TransactionsPage />} />
+                        <Route path="/transactions/new" element={<TransactionsPage />} />
+                        <Route path="/accounts" element={<AccountsPage />} />
+                        <Route path="/budgets" element={<BudgetsPage />} />
+                        <Route path="/reports" element={<ReportsPage />} />
+                        <Route path="/settings" element={<SettingsPage />} />
+                      </Routes>
+      </AppShell>
+    )
 }
 
 export default function App() {

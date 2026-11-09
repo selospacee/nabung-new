@@ -102,7 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           id,
           email,
           name,
-          currency: currency || 'USD',
+          currency: currency || 'IDR',
           timezone: timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
           theme: 'dark',
           defaultAccountId: null,

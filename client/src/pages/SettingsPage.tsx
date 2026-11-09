@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useAuth } from '../auth/AuthContext'
+import { useSupabaseAuth } from '../auth/SupabaseAuthContext'
 import { useCurrentUser, useCurrentUser as useCU } from '../db/hooks'
 import { db } from '../db'
 import { cn, Card, CardHeader, CardTitle, CardContent, Button, Input, Select, Alert, Progress, EmptyState } from '../components/ui'
@@ -8,14 +8,14 @@ import { TrendingUp, User, Mail, DollarSign, Globe, Shield, Database, Download, 
 import { differenceInYears } from 'date-fns'
 
 export function SettingsPage() {
-  const { user, updateProfile, logout } = useAuth()
+  const { user, updateProfile, logout } = useSupabaseAuth()
   const { user: dbUser } = useCU()
   const [activeTab, setActiveTab] = useState('profile')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [exporting, setExporting] = useState(false)
 
-  const currency = user?.currency || 'USD'
+  const currency = user?.currency || 'IDR'
 
   const handleUpdateProfile = async (data: any) => {
     setSaving(true)

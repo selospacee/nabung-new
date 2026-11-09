@@ -314,39 +314,79 @@ export function EmptyState({ icon, title, description, action, className }: Empt
 // --- Tabs ---
 interface TabsProps {
   defaultValue: string
-  values: string[]
-  labels: string[]
-  children: (value: string) => ReactNode
+  value?: string
+  onValueChange?: (value: string) => void
+  children: ReactNode
   className?: string
 }
 
-export function Tabs({ defaultValue, values, labels, children, className }: TabsProps) {
-  const [active, setActive] = React.useState(defaultValue)
+interface TabsListProps {
+  children: ReactNode
+  className?: string
+}
+
+interface TabsTriggerProps {
+  value: string
+  children: ReactNode
+  className?: string
+}
+
+interface TabsContentProps {
+  value: string
+  children: ReactNode
+  className?: string
+}
+
+export function Tabs({ defaultValue, value: controlledValue, onValueChange, children, className }: TabsProps) {
+  const [uncontrolledValue, setUncontrolledValue] = React.useState(defaultValue)
+  const isControlled = controlledValue !== undefined
+  const activeValue = isControlled ? controlledValue : uncontrolledValue
+  const setValue = isControlled ? onValueChange! : setUncontrolledValue
 
   return (
-    <div className={className}>
-      <div className="flex gap-1 border-b border-border">
-        {values.map((v, i) => (
-          <button
-            key={v}
-            onClick={() => setActive(v)}
-            className={cn(
-              'px-4 py-2 text-sm font-medium border-b-2 -mb-0 transition-colors',
-              active === v
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            )}
-          >
-            {labels[i]}
-          </button>
-        ))}
+    <TabsContext.Provider value={{ activeValue, setValue }}>
+      <div className={className}>
+        {children}
       </div>
-      <div className="mt-4">
-        {children(active)}
-      </div>
-    </div>
+    </TabsContext.Provider>
   )
 }
+
+export function TabsList({ children, className }: TabsListProps) {
+  return <div className={cn('flex gap-1 border-b border-border', className)}>{children}</div>
+}
+
+export function TabsTrigger({ value, children, className }: TabsTriggerProps) {
+  const context = React.useContext(TabsContext)
+  if (!context) throw new Error('TabsTrigger must be used within Tabs')
+  const { activeValue, setValue } = context
+  
+  return (
+    <button
+      onClick={() => setValue(value)}
+      className={cn(
+        'px-4 py-2 text-sm font-medium border-b-2 -mb-0 transition-colors',
+        activeValue === value
+          ? 'border-primary text-primary'
+          : 'border-transparent text-muted-foreground hover:text-foreground',
+        className
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
+export function TabsContent({ value, children, className }: TabsContentProps) {
+  const context = React.useContext(TabsContext)
+  if (!context) throw new Error('TabsContent must be used within Tabs')
+  const { activeValue } = context
+  
+  if (activeValue !== value) return null
+  return <div className={cn('mt-4', className)}>{children}</div>
+}
+
+const TabsContext = React.createContext<{ activeValue: string; setValue: (value: string) => void } | null>(null)
 
 // --- Skeleton ---
 export function Skeleton({ className }: { className?: string }) {

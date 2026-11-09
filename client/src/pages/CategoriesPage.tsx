@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useCurrentUser, useCategories } from '../db/hooks'
 import { db } from '../db'
+import { pushLocalChangesToSupabase } from '../db/sync'
 import { v4 as uuid } from 'uuid'
 import { cn, Card, CardHeader, CardTitle, CardContent, Button, Badge, Dialog, Input, Select, EmptyState } from '../components/ui'
 import {
@@ -113,15 +114,19 @@ export function CategoriesPage() {
         })
       }
       setShowForm(false)
-    } finally {
-      setSaving(false)
-    }
-  }
+          } finally {
+            setSaving(false)
+          }
+          // Push to Supabase
+          await pushLocalChangesToSupabase(userId || '')
+        }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this category? Transactions using it won't be affected.")) return
-    await db.categories.delete(id)
-  }
+      if (!confirm("Delete this category? Transactions using it won't be affected.")) return
+      await db.categories.delete(id)
+      // Push to Supabase
+      await pushLocalChangesToSupabase(userId || '')
+    }
 
   if (!categories) {
     return (

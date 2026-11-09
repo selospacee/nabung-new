@@ -41,13 +41,15 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
   const [isOnboarded, setIsOnboarded] = useState(false)
   
   // Track if we're currently fetching a profile to prevent duplicate calls
-  const fetchPromisesRef = useRef<Map<string, Promise<void>>>(new Map())
-  // Track userIds that have already been fully loaded (prevents stale-closure race)
-  const loadedUserRef = useRef<Set<string>>(new Set())
-  // Track if initial load is complete
-  const initialLoadDone = useRef(false)
-  // Track if signUp is in progress to prevent premature sync from auth state change
-  const signUpInProgressRef = useRef<Set<string>>(new Set())
+    const fetchPromisesRef = useRef<Map<string, Promise<void>>>(new Map())
+    // Track userIds that have already been fully loaded (prevents stale-closure race)
+    const loadedUserRef = useRef<Set<string>>(new Set())
+    // Track userId currently being fetched (prevents stale-closure race)
+    const fetchingUserRef = useRef<string | null>(null)
+    // Track if initial load is complete
+    const initialLoadDone = useRef(false)
+    // Track if signUp is in progress to prevent premature sync from auth state change
+    const signUpInProgressRef = useRef<Set<string>>(new Set())
 
   // Global safety timeout - forces isLoading=false after 20s no matter what
   useEffect(() => {
@@ -82,15 +84,16 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
       }
     
       console.log('[Auth] Fetching profile for:', userId)
-    
-      // Create a promise that we can share with other callers
-      let resolvePromise: (value: void) => void
-      let rejectPromise: (reason: Error) => void
-      const promise = new Promise<void>((resolve, reject) => {
-        resolvePromise = resolve
-        rejectPromise = reject
-      })
-      fetchPromisesRef.current.set(userId, promise)
+            fetchingUserRef.current = userId
+
+            // Create a promise that we can share with other callers
+            let resolvePromise: (value: void) => void
+            let rejectPromise: (reason: Error) => void
+            const promise = new Promise<void>((resolve, reject) => {
+              resolvePromise = resolve
+              rejectPromise = reject
+            })
+            fetchPromisesRef.current.set(userId, promise)
     
       const safetyTimeout = setTimeout(() => {
         console.error('[Auth] Safety timeout (10s) - forcing isLoading=false')
@@ -274,12 +277,13 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
         setIsOnboarded(false)
         rejectPromise!(error as Error)
       } finally {
-        clearTimeout(safetyTimeout)
-        fetchPromisesRef.current.delete(userId)
-        loadedUserRef.current.add(userId)
-        console.log('[Auth] fetchUserProfile done, setting isLoading=false')
-        setIsLoading(false)
-      }
+              clearTimeout(safetyTimeout)
+              fetchPromisesRef.current.delete(userId)
+              fetchingUserRef.current = null
+              loadedUserRef.current.add(userId)
+              console.log('[Auth] fetchUserProfile done, setting isLoading=false')
+              setIsLoading(false)
+            }
     }, [])
 
   useEffect(() => {
@@ -303,13 +307,13 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
         }
         
         if (session?.user) {
-          console.log('[Auth] Session found, fetching profile')
-          // Only fetch if not already loaded
-          if (user?.id !== session.user.id) {
-            await fetchUserProfile(session.user.id)
-          }
-          // Always sync data from Supabase to local Dexie (source of truth)
-          await syncUserDataFromSupabase(session.user.id)
+                  console.log('[Auth] Session found, fetching profile')
+                  // Only fetch if not already loaded and not currently fetching
+                  if (fetchingUserRef.current !== session.user.id && !loadedUserRef.current.has(session.user.id)) {
+                    await fetchUserProfile(session.user.id)
+                  }
+                  // Always sync data from Supabase to local Dexie (source of truth)
+                  await syncUserDataFromSupabase(session.user.id)
           // NOTE: Don't push on initial session check - sync from Supabase is source of truth
         } else {
           console.log('[Auth] No session found')

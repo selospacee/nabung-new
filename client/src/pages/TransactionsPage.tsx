@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { v4 as uuid } from 'uuid'
-import { useCurrentUser, useTransactions, useAccounts, useCategories, useDefaultAccount } from '../db/hooks'
+import { useCurrentUser, useTransactions, useAccounts, useCategories, useDefaultAccount, useAccountBalances, useCashiers } from '../db/hooks'
 import { cn, Card, CardHeader, CardTitle, CardContent, Button, Badge, Dialog, Input, Select, Textarea, EmptyState, Skeleton, Tabs, Alert } from '../components/ui'
 import { formatCurrency, centsToDisplay, centsToDisplaySigned, displayToCents } from '../utils/currency'
 import { formatDate, toISODate } from '../utils/dates'
@@ -10,12 +10,13 @@ import {
   Plus, Search, Filter, X, Edit3, Trash2, Receipt, Mic, Wallet, Briefcase, Laptop,
   ChevronDown, ChevronUp, DollarSign, CreditCard, Banknote, PiggyBank,
   TrendingUp, TrendingDown, ArrowRightLeft, MoreHorizontal, Building2,
-  Car, ShoppingBag, Utensils, FileText, Heart, Film, GraduationCap, Package, Camera, MapPin, RefreshCw
+  Car, ShoppingBag, Utensils, FileText, Heart, Film, GraduationCap, Package, Camera, MapPin, RefreshCw, Loader2, User, Users
 } from 'lucide-react'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import { useReceiptOcr } from '../hooks/useReceiptOcr'
 import type { Transaction as TxType, Category } from '../types'
 import { db } from '../db'
+import { pushLocalChangesToSupabase } from '../db/sync'
 import React from 'react'
 
 const ACCOUNT_ICONS: Record<string, any> = {
@@ -39,13 +40,28 @@ export function TransactionsPage() {
   const categories = useCategories(userId)
   const defaultAccount = useDefaultAccount()
   const transactions = useTransactions(userId)
+  const balances = useAccountBalances(userId)
+
+  const accountsWithBalance = useMemo(() => {
+    return (accounts || []).map(a => ({ ...a, balance: balances[a.id] || 0 }))
+  }, [accounts, balances])
 
   // Auto-open form when navigating to /transactions/new
-  const [formOpen, setFormOpen] = useState(location.pathname === '/transactions/new')
-  
-  useEffect(() => {
-    setFormOpen(location.pathname === '/transactions/new')
-  }, [location.pathname])
+    const [formOpen, setFormOpen] = useState(location.pathname === '/transactions/new')
+
+    useEffect(() => {
+      setFormOpen(location.pathname === '/transactions/new')
+    }, [location.pathname])
+
+    // Auto-open camera when ?autoOpen=camera param present
+    useEffect(() => {
+      const params = new URLSearchParams(location.search)
+      if (params.get('autoOpen') === 'camera') {
+        openCameraDirect()
+        // Clean up URL
+        navigate('/transactions/new', { replace: true })
+      }
+    }, [location.search])
 
   const [filters, setFilters] = useState({
     type: '' as '' | 'income' | 'expense' | 'transfer',
@@ -69,92 +85,113 @@ export function TransactionsPage() {
     const [locationPermission, setLocationPermission] = useState<'denied' | 'granted' | 'pending' | 'unsupported'>('unsupported')
   
     const getCurrentLocation = useCallback(async () => {
-      if (!navigator.geolocation) {
-        setLocationPermission('unsupported')
-        alert('Geolocation is not supported by your browser.')
-        return
-      }
+          if (!navigator.geolocation) {
+            setLocationPermission('unsupported')
+            alert('Geolocation is not supported by your browser.')
+            return
+          }
 
-      setLocationPermission('pending')
-    
-      try {
-        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0
-          })
-        })
-      
-        const { latitude, longitude } = position.coords
-      
-        // Reverse geocode to get address (using Nominatim - OpenStreetMap)
-        try {
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&accept-language=en`
-          )
-          const data = await response.json()
-          const address = data.display_name || ''
-        
-          setForm(f => ({
-            ...f,
-            latitude,
-            longitude,
-            location: address
-          }))
-        
-          setLocationPermission('granted')
-        } catch (geocodeError) {
-          // If geocoding fails, still set coordinates
-          setForm(f => ({
-            ...f,
-            latitude,
-            longitude,
-            location: `Lat: ${latitude.toFixed(4)}, Lng: ${longitude.toFixed(4)}`
-          }))
-        
-          setLocationPermission('granted')
-        }
-      } catch (error) {
-        setLocationPermission('denied')
-        alert('Unable to get your location. Please ensure location access is enabled.')
-      }
-    }, [])
-  
-    // Get coordinates from address/location using geocoding (manual — triggered by the Search button)
-    const [geocoding, setGeocoding] = useState(false)
-    const getCurrentLocationFromAddress = useCallback(async (address: string) => {
-          if (!address || address.trim() === '') return
-          setGeocoding(true)
-
+          setLocationPermission('pending')
+   
           try {
-            // Using Nominatim (OpenStreetMap) for geocoding
-            const response = await fetch(
-              `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&addressdetails=1`
-            )
-            const data = await response.json()
+            const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+              navigator.geolocation.getCurrentPosition(resolve, reject, {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+              })
+            })
+     
+            const { latitude, longitude } = position.coords
+     
+            // Only fill lat/long, not address (per user request)
+            setForm(f => ({
+              ...f,
+              latitude,
+              longitude,
+            }))
        
-            if (data && data.length > 0) {
-              const { lat, lon, display_name } = data[0]
-              setForm(f => ({
-                ...f,
-                latitude: parseFloat(lat),
-                longitude: parseFloat(lon),
-                location: display_name || address
-              }))
-            } else {
-              alert('No location found for that address. Try a different search term.')
-            }
+            setLocationPermission('granted')
           } catch (error) {
-            console.warn('Could not get location from address:', error)
-            // Don't show error to user as this is a convenience feature
-          } finally {
-            setGeocoding(false)
+            setLocationPermission('denied')
+            alert('Unable to get your location. Please ensure location access is enabled.')
           }
         }, [])
+  
+    // Get coordinates from address/location using geocoding (manual — triggered by the Search button)
+        const [geocoding, setGeocoding] = useState(false)
+        const getCurrentLocationFromAddress = useCallback(async (address: string) => {
+              if (!address || address.trim() === '') return
+              setGeocoding(true)
 
-  // Receipt OCR
-  const ocrCtx = useReceiptOcr()
+              try {
+                // Try Google Maps Geocoding API first (if API key is available)
+                const googleApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+                let response: Response
+                let data: any
+
+                if (googleApiKey) {
+                  // Use Google Maps Geocoding API
+                  response = await fetch(
+                    `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${googleApiKey}`
+                  )
+                  data = await response.json()
+              
+                  if (data.status === 'OK' && data.results.length > 0) {
+                    const { lat, lng } = data.results[0].geometry.location
+                    const formattedAddress = data.results[0].formatted_address
+                
+                    setForm(f => ({
+                      ...f,
+                      latitude: lat,
+                      longitude: lng,
+                      location: formattedAddress,
+                    }))
+                    setGeocoding(false)
+                    return
+                  }
+                }
+
+                // Fallback to Nominatim (OpenStreetMap)
+                response = await fetch(
+                  `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&addressdetails=1`
+                )
+                data = await response.json()
+      
+                if (data && data.length > 0) {
+                  const { lat, lon, display_name } = data[0]
+                  setForm(f => ({
+                    ...f,
+                    latitude: parseFloat(lat),
+                    longitude: parseFloat(lon),
+                    location: display_name || address,
+                  }))
+                } else {
+                  alert('No location found for that address. Try a different search term.')
+                }
+              } catch (error) {
+                console.warn('Could not get location from address:', error)
+                // Don't show error to user as this is a convenience feature
+              } finally {
+                setGeocoding(false)
+              }
+            }, [])
+
+              // Open camera directly when Receipt button clicked
+              const openCameraDirect = useCallback(async () => {
+                setCameraOpen(true)
+                try {
+                  const stream = await navigator.mediaDevices.getUserMedia({ video: true })
+                  if (cameraRef.current) {
+                    cameraRef.current.srcObject = stream
+                  }
+                } catch {
+                  alert('Camera access denied. Try uploading a photo instead.')
+                }
+              }, [])
+
+              // Receipt OCR
+    const ocrCtx = useReceiptOcr()
   const [showReceiptDialog, setShowReceiptDialog] = useState(false)
   const [ocrResult, setOcrResult] = useState<any>(null)
   const [receiptImage, setReceiptImage] = useState<string | null>(null)
@@ -162,44 +199,45 @@ export function TransactionsPage() {
   const cameraRef = useRef<HTMLVideoElement>(null)
   const [cameraOpen, setCameraOpen] = useState(false)
 
-  const currency = user?.currency || 'USD'
+  const currency = user?.currency || 'IDR'
 
   // Filter + sort transactions
-  const filteredTxns = useMemo(() => {
-    if (!transactions) return []
-    let result = [...transactions]
+    const filteredTxns = useMemo(() => {
+      if (!transactions) return []
+      let result = [...transactions]
 
-    if (filters.type) {
-      result = result.filter(t => t.type === filters.type)
-    }
-    if (filters.categoryIds.length > 0) {
-      result = result.filter(t => t.categoryId && filters.categoryIds.includes(t.categoryId))
-    }
-    if (filters.accountIds.length > 0) {
-      result = result.filter(t => filters.accountIds.includes(t.accountId))
-    }
-    if (filters.startDate) {
-      result = result.filter(t => t.date >= filters.startDate)
-    }
-    if (filters.endDate) {
-      result = result.filter(t => t.date <= filters.endDate)
-    }
-    if (filters.search) {
-      const q = filters.search.toLowerCase()
-      result = result.filter(t =>
-        t.description.toLowerCase().includes(q) || t.merchant?.toLowerCase().includes(q)
-      )
-    }
+      if (filters.type) {
+        result = result.filter(t => t.type === filters.type)
+      }
+      if (filters.categoryIds.length > 0) {
+        result = result.filter(t => t.categoryId && filters.categoryIds.includes(t.categoryId))
+      }
+      if (filters.accountIds.length > 0) {
+        result = result.filter(t => filters.accountIds.includes(t.accountId))
+      }
+      if (filters.startDate) {
+        result = result.filter(t => t.date >= filters.startDate)
+      }
+      if (filters.endDate) {
+        result = result.filter(t => t.date <= filters.endDate)
+      }
+      if (filters.search) {
+        const q = filters.search.toLowerCase()
+        result = result.filter(t =>
+          t.description.toLowerCase().includes(q) || t.merchant?.toLowerCase().includes(q)
+        )
+      }
 
-    result.sort((a, b) => {
-      const cmp = sortBy === 'date'
-        ? a.date.localeCompare(b.date)
-        : a.amount - b.amount
-      return sortDir === 'asc' ? cmp : -cmp
-    })
+      result.sort((a, b) => {
+        const cmp = sortBy === 'date'
+          ? a.date.localeCompare(b.date)
+          : a.amount - b.amount
+        return sortDir === 'asc' ? cmp : -cmp
+      })
 
-    return result
-  }, [transactions, filters, sortBy, sortDir])
+      // Only show latest 3 transactions
+      return result.slice(0, 3)
+    }, [transactions, filters, sortBy, sortDir])
 
   const hasFilters = filters.type || filters.categoryIds.length > 0 || filters.accountIds.length > 0 ||
     filters.startDate || filters.endDate || filters.search
@@ -209,35 +247,21 @@ export function TransactionsPage() {
   const handleDelete = async (id: string) => {
       if (!confirm('Delete this transaction?')) return
 
-      // Reverse transaction effect on account before deleting
-      const tx = await db.transactions.get(id)
-      if (tx && !tx.deletedAt) {
-        const account = await db.accounts.get(tx.accountId)
-        if (account) {
-          let change = 0
-          if (tx.type === 'income') {
-            change = -tx.amount   // reverse: subtract the income
-          } else if (tx.type === 'expense') {
-            change = tx.amount    // reverse: add back the expense
-          }
-          // transfer: no change to this account
-          const newBalance = account.balance + change
-          await db.accounts.update(tx.accountId, { balance: newBalance })
-        }
-      }
-
       await db.transactions.update(id, { deletedAt: new Date().toISOString() })
+      // Push to Supabase
+      await pushLocalChangesToSupabase(userId || '')
     }
 
-    const addTransaction = async (tx: Partial<TxType> & { accountId: string; type: TxType['type']; amount: number; date: string }) => {
+    const addTransaction = async (tx: Partial<TxType> & { accountId: string; type: TxType['type']; amount: number; date: string; cashierId?: string }) => {
       const id = uuid()
       const now = new Date().toISOString()
 
       await db.transactions.add({
-              id,
-              userId: userId || '',
-              accountId: tx.accountId,
+                    id,
+                    userId: userId!,
+                    accountId: tx.accountId,
               categoryId: tx.categoryId || null,
+              cashierId: tx.cashierId || null,
               amount: tx.amount,
               currency: currency,
               type: tx.type,
@@ -255,72 +279,35 @@ export function TransactionsPage() {
               deletedAt: null,
             })
 
-      // Update account balance
-            const account = await db.accounts.get(tx.accountId)
-            if (account) {
-              let change = 0
-              if (tx.type === 'income') {
-                change = tx.amount
-              } else if (tx.type === 'expense') {
-                change = -tx.amount
-              }
-              // transfer: no change to this account (assuming same account)
-              const newBalance = account.balance + change
-              await db.accounts.update(tx.accountId, { balance: newBalance })
-            }
-          }
+      // Push to Supabase
+      await pushLocalChangesToSupabase(userId || '')
+    }
 
-    const updateTransaction = async (id: string, tx: Partial<TxType> & { accountId: string; type: TxType['type']; amount: number; date: string }) => {
-      // Get the old transaction to reverse its effect
-            const oldTx = await db.transactions.get(id)
-            if (oldTx && !oldTx.deletedAt) {
-              const oldAccount = await db.accounts.get(oldTx.accountId)
-              if (oldAccount) {
-                let oldChange = 0
-                if (oldTx.type === 'income') {
-                  oldChange = -oldTx.amount   // reverse: subtract the income
-                } else if (oldTx.type === 'expense') {
-                  oldChange = oldTx.amount    // reverse: add back the expense
-                }
-                // transfer: no change
-                const oldNewBalance = oldAccount.balance + oldChange
-                await db.accounts.update(oldTx.accountId, { balance: oldNewBalance })
-              }
-            }
+    const updateTransaction = async (id: string, tx: Partial<TxType> & { accountId: string; type: TxType['type']; amount: number; date: string; cashierId?: string }) => {
+      const now = new Date().toISOString()
+      await db.transactions.update(id, {
+        accountId: tx.accountId,
+        categoryId: tx.categoryId || null,
+        cashierId: tx.cashierId || null,
+        amount: tx.amount,
+        type: tx.type,
+        date: tx.date,
+        description: tx.description || '',
+        merchant: tx.merchant || '',
+        notes: tx.notes || '',
+        receiptImage: tx.receiptImage || null,
+        receiptOcrText: tx.receiptOcrText || null,
+        location: tx.location || null,
+        latitude: tx.latitude ?? null,
+        longitude: tx.longitude ?? null,
+        updatedAt: now,
+      })
 
-      // Apply the new transaction's effect
-            const now = new Date().toISOString()
-            await db.transactions.update(id, {
-              accountId: tx.accountId,
-              categoryId: tx.categoryId || null,
-              amount: tx.amount,
-              type: tx.type,
-              date: tx.date,
-              description: tx.description || '',
-              merchant: tx.merchant || '',
-              notes: tx.notes || '',
-              receiptImage: tx.receiptImage || null,
-              receiptOcrText: tx.receiptOcrText || null,
-              location: tx.location || null,
-              latitude: tx.latitude ?? null,
-              longitude: tx.longitude ?? null,
-              updatedAt: now,
-            })
+      // Push to Supabase
+      await pushLocalChangesToSupabase(userId || '')
+    }
 
-      // Update account balance with new transaction
-            const newAccount = await db.accounts.get(tx.accountId)
-            if (newAccount) {
-              let newChange = 0
-              if (tx.type === 'income') {
-                newChange = tx.amount
-              } else if (tx.type === 'expense') {
-                newChange = -tx.amount
-              }
-              // transfer: no change to this account (assuming same account)
-              const newNewBalance = newAccount.balance + newChange
-              await db.accounts.update(tx.accountId, { balance: newNewBalance })
-            }
-          }
+  const cashiers = useCashiers(userId)
 
   const [form, setForm] = useState({
         type: 'expense' as 'income' | 'expense' | 'transfer',
@@ -328,6 +315,7 @@ export function TransactionsPage() {
         date: toISODate(new Date()),
         categoryId: '',
         accountId: defaultAccount?.id || '',
+        cashierId: '',
         description: '',
         merchant: '',
         notes: '',
@@ -346,6 +334,7 @@ export function TransactionsPage() {
         date: tx?.date || toISODate(new Date()),
         categoryId: tx?.categoryId || '',
         accountId: tx?.accountId || defaultAccount?.id || '',
+        cashierId: tx?.cashierId || '',
         description: tx?.description || '',
         merchant: tx?.merchant || '',
         notes: tx?.notes || '',
@@ -369,45 +358,45 @@ export function TransactionsPage() {
       if (!amountCents || amountCents <= 0) return
 
       setSaving(true)
-      try {
-              if (editingId) {
-                await updateTransaction(editingId, {
-                  type: form.type,
-                  amount: Math.abs(amountCents),
-                  date: form.date,
-                  categoryId: form.categoryId || null,
-                  accountId: form.accountId,
-                  description: form.description,
-                  merchant: form.merchant,
-                  notes: form.notes,
-                  receiptImage: form.receiptImage,
-                  receiptOcrText: form.receiptOcrText,
-                  location: form.location,
-                  latitude: form.latitude,
-                  longitude: form.longitude,
-                })
-              } else {
-                await addTransaction({
-                  type: form.type,
-                  amount: Math.abs(amountCents),
-                  date: form.date,
-                  categoryId: form.categoryId || null,
-                  accountId: form.accountId,
-                  description: form.description,
-                  merchant: form.merchant,
-                  notes: form.notes,
-                  receiptImage: form.receiptImage,
-                  receiptOcrText: form.receiptOcrText,
-                  location: form.location,
-                  latitude: form.latitude,
-                  longitude: form.longitude,
-                })
-              }
-        setFormOpen(false)
-      } finally {
-        setSaving(false)
-      }
-    }
+            try {
+                    if (editingId) {
+                      await updateTransaction(editingId, {
+                        type: form.type,
+                        amount: Math.abs(amountCents),
+                        date: form.date,
+                        categoryId: form.categoryId || null,
+                        accountId: form.accountId || defaultAccount?.id || (accounts?.[0]?.id || ''),
+                        description: form.description,
+                        merchant: form.merchant,
+                        notes: form.notes,
+                        receiptImage: form.receiptImage,
+                        receiptOcrText: form.receiptOcrText,
+                        location: form.location,
+                        latitude: form.latitude,
+                        longitude: form.longitude,
+                      })
+                    } else {
+                      await addTransaction({
+                        type: form.type,
+                        amount: Math.abs(amountCents),
+                        date: form.date,
+                        categoryId: form.categoryId || null,
+                        accountId: form.accountId || defaultAccount?.id || (accounts?.[0]?.id || ''),
+                        description: form.description,
+                        merchant: form.merchant,
+                        notes: form.notes,
+                        receiptImage: form.receiptImage,
+                        receiptOcrText: form.receiptOcrText,
+                        location: form.location,
+                        latitude: form.latitude,
+                        longitude: form.longitude,
+                      })
+                    }
+            } finally {
+              setFormOpen(false)
+              setSaving(false)
+            }
+          }
 
   // Voice entry handler
   const handleVoiceEntry = async () => {
@@ -420,27 +409,29 @@ export function TransactionsPage() {
   }
 
   const confirmVoiceTransaction = async () => {
-          if (!voiceCtx.parsed.amount || !voiceCtx.parsed.date) return
+                if (!voiceCtx.parsed.amount || !voiceCtx.parsed.date) return
 
-          await addTransaction({
-            type: 'expense',
-            amount: voiceCtx.parsed.amount,
-            date: voiceCtx.parsed.date,
-            categoryId: voiceCtx.parsed.suggestedCategoryId || null,
-            accountId: defaultAccount?.id || '',
-            description: voiceCtx.parsed.description,
-            merchant: voiceCtx.parsed.merchant,
-            notes: '',
-            receiptImage: null,
-            receiptOcrText: null,
-            location: voiceCtx.parsed.location || '',
-            latitude: voiceCtx.parsed.latitude ?? null,
-            longitude: voiceCtx.parsed.longitude ?? null,
-          })
+                await addTransaction({
+                  type: voiceCtx.parsed.suggestedType || 'expense',
+                  amount: voiceCtx.parsed.amount,
+                  date: voiceCtx.parsed.date,
+                  categoryId: voiceCtx.parsed.suggestedCategoryId || null,
+                  accountId: defaultAccount?.id || (accounts?.[0]?.id || ''),
+                  description: voiceCtx.parsed.description,
+                  merchant: voiceCtx.parsed.merchant,
+                  notes: '',
+                  receiptImage: null,
+                  receiptOcrText: null,
+                  location: voiceCtx.parsed.location || '',
+                  latitude: voiceCtx.parsed.latitude ?? null,
+                  longitude: voiceCtx.parsed.longitude ?? null,
+                })
+                // addTransaction already pushes to Supabase
 
-          setShowVoiceDialog(false)
-          voiceCtx.clearTranscript()
-        }
+                setShowVoiceDialog(false)
+                voiceCtx.clearTranscript()
+                setFormOpen(false) // Also close main form if open
+              }
 
   // Receipt OCR handler
   const handleImageUpload = async (file: File) => {
@@ -490,28 +481,30 @@ export function TransactionsPage() {
   }
 
   const confirmReceiptTransaction = async () => {
-          if (!ocrResult?.total || !ocrResult?.date) return
+                if (!ocrResult?.total || !ocrResult?.date) return
 
-          await addTransaction({
-            type: 'expense',
-            amount: ocrResult.total,
-            date: ocrResult.date,
-            categoryId: null,
-            accountId: defaultAccount?.id || '',
-            description: ocrResult.merchant || '',
-            merchant: ocrResult.merchant || '',
-            notes: '',
-            receiptImage: receiptImage,
-            receiptOcrText: ocrResult.text,
-            location: '',
-            latitude: null,
-            longitude: null,
-          })
+                await addTransaction({
+                  type: ocrResult.suggestedType || 'expense',
+                  amount: ocrResult.total,
+                  date: ocrResult.date,
+                  categoryId: ocrResult.suggestedCategoryId || null,
+                  accountId: defaultAccount?.id || (accounts?.[0]?.id || ''),
+                  description: ocrResult.merchant || '',
+                  merchant: ocrResult.merchant || '',
+                  notes: '',
+                  receiptImage: receiptImage,
+                  receiptOcrText: ocrResult.text,
+                  location: '',
+                  latitude: null,
+                  longitude: null,
+                })
+                // addTransaction already pushes to Supabase
 
-          setShowReceiptDialog(false)
-          setReceiptImage(null)
-          setOcrResult(null)
-        }
+                setShowReceiptDialog(false)
+                setReceiptImage(null)
+                setOcrResult(null)
+                setFormOpen(false) // Also close main form if open
+              }
 
   if (!transactions) {
     return (
@@ -556,9 +549,9 @@ export function TransactionsPage() {
           <Mic className="w-4 h-4 mr-1" /> Voice
         </Button>
 
-        <Button variant="outline" size="sm" onClick={() => { setCameraOpen(true); fileInputRef.current?.click() }}>
-          <Receipt className="w-4 h-4 mr-1" /> Receipt
-        </Button>
+        <Button variant="outline" size="sm" onClick={openCameraDirect}>
+                  <Receipt className="w-4 h-4 mr-1" /> Receipt
+                </Button>
 
         <input
           ref={fileInputRef}
@@ -697,8 +690,14 @@ export function TransactionsPage() {
                             {cat.name}
                           </Badge>
                         )}
+                        {tx.cashierId && cashiers && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            <Users className="w-2.5 h-2.5 mr-1" />
+                            {cashiers.find(c => c.id === tx.cashierId)?.name}
+                          </Badge>
+                        )}
                         <span className="text-xs text-muted-foreground">
-                          {formatDate(tx.date)} {account && `· ${account.name}`}
+                          {formatDate(tx.date)} {(account || defaultAccount) && `· ${(account || defaultAccount)?.name}`}
                         </span>
                       </div>
                     </div>
@@ -742,7 +741,7 @@ export function TransactionsPage() {
       {/* Manual form dialog */}
       <Dialog open={formOpen} onClose={() => setFormOpen(false)}>
         <form onSubmit={submitForm}>
-          <div className="p-6">
+          <div className="p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold mb-4">
               {editingId ? 'Edit Transaction' : 'Add Transaction'}
             </h3>
@@ -783,14 +782,14 @@ export function TransactionsPage() {
               </div>
 
               <Select
-                label="Account"
-                value={form.accountId}
-                onChange={e => setForm(f => ({ ...f, accountId: e.target.value }))}
-              >
-                {accounts?.map(a => (
-                  <option key={a.id} value={a.id}>{a.name} ({formatCurrency(a.balance, currency)})</option>
-                ))}
-              </Select>
+                              label="Account"
+                              value={form.accountId}
+                              onChange={e => setForm(f => ({ ...f, accountId: e.target.value }))}
+                            >
+                              {accountsWithBalance.map(a => (
+                                <option key={a.id} value={a.id}>{a.name} ({formatCurrency(a.balance, currency)})</option>
+                              ))}
+                            </Select>
 
               <Select
                               label="Category"
@@ -810,6 +809,17 @@ export function TransactionsPage() {
                       {c.name}
                     </span>
                   </option>
+                ))}
+              </Select>
+
+              <Select
+                label="Cashier"
+                value={form.cashierId}
+                onChange={e => setForm(f => ({ ...f, cashierId: e.target.value }))}
+              >
+                <option value="">Select cashier (optional)</option>
+                {cashiers?.map(c => (
+                  <option key={c.id} value={c.id}>{c.name} ({c.role})</option>
                 ))}
               </Select>
 
@@ -892,9 +902,14 @@ export function TransactionsPage() {
       </Dialog>
 
       {/* Voice entry dialog */}
-      <Dialog open={showVoiceDialog} onClose={() => { setShowVoiceDialog(false); voiceCtx.stopListening() }}>
-        <div className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Voice Entry</h3>
+            <Dialog open={showVoiceDialog} onClose={() => { setShowVoiceDialog(false); voiceCtx.stopListening() }}>
+              <div className="p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold">Voice Entry</h3>
+                  <Button variant="ghost" size="icon" onClick={() => { setShowVoiceDialog(false); voiceCtx.stopListening() }}>
+                    <X className="w-5 h-5" />
+                  </Button>
+                </div>
 
           {!voiceCtx.supportsSpeech ? (
             <Alert variant="warning">
@@ -926,10 +941,19 @@ export function TransactionsPage() {
               )}
 
               {voiceCtx.error && (
-                <Alert variant="destructive">{voiceCtx.error}</Alert>
-              )}
+                              <Alert variant="destructive">{voiceCtx.error}</Alert>
+                            )}
 
-              {/* Parsed result */}
+                            {voiceCtx.aiParsing && (
+                              <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 text-sm">
+                                <div className="flex items-center gap-2">
+                                  <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                                  <span>Enhancing with AI...</span>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Parsed result */}
               {voiceCtx.parsed.amount && (
                 <div className="space-y-3 p-4 rounded-lg border border-border bg-card">
                   <h4 className="text-sm font-medium text-muted-foreground">Parsed Transaction</h4>
@@ -987,9 +1011,14 @@ export function TransactionsPage() {
       </Dialog>
 
       {/* Receipt OCR dialog */}
-      <Dialog open={showReceiptDialog} onClose={() => { setShowReceiptDialog(false); setOcrResult(null) }}>
-        <div className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Receipt Capture</h3>
+            <Dialog open={showReceiptDialog} onClose={() => { setShowReceiptDialog(false); setOcrResult(null) }}>
+              <div className="p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold">Receipt Capture</h3>
+                  <Button variant="ghost" size="icon" onClick={() => { setShowReceiptDialog(false); setOcrResult(null) }}>
+                    <X className="w-5 h-5" />
+                  </Button>
+                </div>
 
           {receiptImage && (
             <div className="mb-4">
@@ -1047,18 +1076,58 @@ export function TransactionsPage() {
           )}
 
           {ocrCtx.error && (
-            <Alert variant="destructive">{ocrCtx.error}</Alert>
-          )}
+                                <Alert variant="destructive">{ocrCtx.error}</Alert>
+                              )}
 
-          <div className="flex gap-3 pt-4">
-            <Button
-              variant="default"
-              size="sm"
-              disabled={!ocrResult?.total || !ocrResult?.date}
-              onClick={confirmReceiptTransaction}
-            >
-              Save Transaction
-            </Button>
+                              {ocrCtx.aiParsing && (
+                                <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 text-sm">
+                                  <div className="flex items-center gap-2">
+                                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                                    <span>Enhancing with AI...</span>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* AI Fill button */}
+                    {ocrResult && !ocrCtx.isProcessing && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => {
+                          // Auto-fill the manual transaction form with OCR data
+                          setForm(f => ({
+                            ...f,
+                            type: ocrResult.suggestedType || 'expense',
+                            amount: ocrResult.total ? String(ocrResult.total / 100) : '',
+                            date: ocrResult.date || toISODate(new Date()),
+                            categoryId: ocrResult.suggestedCategoryId || '',
+                            merchant: ocrResult.merchant || '',
+                            description: ocrResult.merchant || '',
+                            receiptImage: receiptImage,
+                            receiptOcrText: ocrResult.text,
+                            latitude: null,
+                            longitude: null,
+                          }))
+                          setShowReceiptDialog(false)
+                          setOcrResult(null)
+                          setReceiptImage(null)
+                          setFormOpen(true)
+                        }}
+                      >
+                        <Package className="w-4 h-4 mr-1" /> Fill & Edit Transaction
+                      </Button>
+                    )}
+
+                    <div className="flex gap-3 pt-4">
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  disabled={!ocrResult?.total}
+                                  onClick={confirmReceiptTransaction}
+                                >
+                                  Save Transaction
+                                </Button>
             <Button variant="ghost" size="sm" onClick={() => { setShowReceiptDialog(false); setOcrResult(null) }}>
               Cancel
             </Button>
@@ -1067,9 +1136,14 @@ export function TransactionsPage() {
       </Dialog>
 
       {/* Camera dialog */}
-      <Dialog open={cameraOpen} onClose={() => { setCameraOpen(false); }}>
-        <div className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Take Photo</h3>
+            <Dialog open={cameraOpen} onClose={() => { setCameraOpen(false); }}>
+              <div className="p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold">Take Photo</h3>
+                  <Button variant="ghost" size="icon" onClick={() => { setCameraOpen(false); if (cameraRef.current && cameraRef.current.srcObject instanceof MediaStream) cameraRef.current.srcObject.getTracks()[0]?.stop() }}>
+                    <X className="w-5 h-5" />
+                  </Button>
+                </div>
 
           {cameraRef.current ? (
             <div className="relative rounded-lg overflow-hidden border border-border bg-black aspect-video">

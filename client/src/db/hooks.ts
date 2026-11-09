@@ -39,7 +39,7 @@ export function useAccounts(userId?: string | null) {
     if (!userId) userId = getCurrentUser()
     if (!userId) return []
     return db.accounts.where('userId').equals(userId).sortBy('createdAt')
-  }, [])
+  }, [userId])
 }
 
 export function useAccount(id: string | null) {
@@ -50,14 +50,33 @@ export function useAccount(id: string | null) {
   }, [id, uid])
 }
 
+export function useAccountBalances(userId?: string | null) {
+  const transactions = useTransactions(userId)
+  return useMemo(() => {
+    if (!transactions) return {}
+    return transactions
+      .filter(t => !t.deletedAt)
+      .reduce((acc, t) => {
+        const aid = t.accountId
+        if (!acc[aid]) acc[aid] = 0
+        if (t.type === 'income') acc[aid] += t.amount
+        else if (t.type === 'expense') acc[aid] -= t.amount
+        return acc
+      }, {} as Record<string, number>)
+  }, [transactions])
+}
+
 export function useDefaultAccount() {
   const { user } = useCurrentUser()
   const accounts = useAccounts()
-  const account = useMemo(() => {
-    if (!user?.defaultAccountId || !accounts) return null
-    return accounts.find(a => a.id === user.defaultAccountId) || accounts[0] || null
-  }, [user, accounts])
-  return account
+  const balances = useAccountBalances()
+  return useMemo(() => {
+    if (!user) return null
+    if (!accounts) return null
+    const account = accounts.find(a => a.id === user.defaultAccountId) || accounts[0] || null
+    if (!account) return null
+    return { ...account, balance: balances[account.id] || 0 }
+  }, [user, accounts, balances])
 }
 
 // Category hooks
@@ -66,7 +85,7 @@ export function useCategories(userId?: string | null) {
     if (!userId) userId = getCurrentUser()
     if (!userId) return []
     return db.categories.where('userId').equals(userId).sortBy('sortOrder')
-  }, [])
+  }, [userId])
 }
 
 export function useCategoriesByType(type: 'income' | 'expense' | 'transfer', userId?: string | null) {
@@ -129,7 +148,7 @@ export function useTransactions(userId?: string | null, filters?: {
     }
 
     return filtered.sort((a, b) => b.date.localeCompare(a.date))
-  }, [])
+  }, [userId, filters?.startDate, filters?.endDate, filters?.categoryIds?.join(','), filters?.accountIds?.join(','), filters?.type, filters?.search])
 }
 
 export function useTransaction(id: string | null) {
@@ -146,7 +165,7 @@ export function useBudgets(userId?: string | null, yearMonth?: string) {
     if (!userId) userId = getCurrentUser()
     if (!userId || !yearMonth) return []
     return db.budgets.where({ userId, yearMonth }).toArray()
-  }, [])
+  }, [userId, yearMonth])
 }
 
 export function useBudgetsByCategory(categoryId: string, yearMonth?: string) {
@@ -154,7 +173,7 @@ export function useBudgetsByCategory(categoryId: string, yearMonth?: string) {
   return useMemo(() => {
     if (!budgets) return undefined
     return budgets.find(b => b.categoryId === categoryId)
-  }, [budgets, categoryId])
+  }, [budgets, categoryId, yearMonth])
 }
 
 // Goal hooks
@@ -163,7 +182,26 @@ export function useGoals(userId?: string | null) {
     if (!userId) userId = getCurrentUser()
     if (!userId) return []
     return db.goals.where('userId').equals(userId).toArray()
-  }, [])
+  }, [userId])
+}
+
+// Cashier hooks
+export function useCashiers(userId?: string | null, activeOnly = true) {
+  return useLiveQuery(async () => {
+    if (!userId) userId = getCurrentUser()
+    if (!userId) return []
+    let query = db.cashiers.where('userId').equals(userId)
+    if (activeOnly) query = query.filter(c => c.isActive)
+    return query.sortBy('name')
+  }, [userId, activeOnly])
+}
+
+export function useCashier(id: string | null) {
+  const uid = getCurrentUser()
+  return useLiveQuery(async () => {
+    if (!id || !uid) return undefined
+    return db.cashiers.get(id)
+  }, [id, uid])
 }
 
 // Stats helpers

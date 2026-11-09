@@ -44,6 +44,7 @@ export interface ParsedTransaction {
   merchant: string
   description: string
   suggestedCategoryId: string | null
+  suggestedType: 'income' | 'expense' | 'transfer'
   location: string | null
   latitude: number | null
   longitude: number | null
@@ -57,6 +58,7 @@ export interface SpeechToTextResult {
 
 export function useSpeechToText(categories: Category[]) {
   const [isListening, setIsListening] = useState(false)
+  const [aiParsing, setAiParsing] = useState(false)
   const [transcript, setTranscript] = useState('')
   const [parsed, setParsed] = useState<ParsedTransaction>({
     amount: null,
@@ -64,6 +66,7 @@ export function useSpeechToText(categories: Category[]) {
     merchant: '',
     description: '',
     suggestedCategoryId: null,
+    suggestedType: 'expense',
     location: null,
     latitude: null,
     longitude: null,
@@ -138,7 +141,7 @@ export function useSpeechToText(categories: Category[]) {
     // Auto-suggest category
     const suggestedCategoryId = findCategory(categories, merchant, description)
 
-    return { amount, date, merchant, description, suggestedCategoryId, location: null, latitude: null, longitude: null }
+    return { amount, date, merchant, description, suggestedCategoryId, suggestedType: 'expense' as const, location: null, latitude: null, longitude: null }
   }, [categories])
 
   const findCategory = (cats: Category[], merchant: string, desc: string): string | null => {
@@ -262,21 +265,22 @@ export function useSpeechToText(categories: Category[]) {
   }, [])
 
   const clearTranscript = useCallback(() => {
-    setTranscript('')
-    setParsed({ amount: null, date: null, merchant: '', description: '', suggestedCategoryId: null, location: null, latitude: null, longitude: null })
-    transcriptRef.current = ''
-  }, [])
+      setTranscript('')
+      setParsed({ amount: null, date: null, merchant: '', description: '', suggestedCategoryId: null, suggestedType: 'expense', location: null, latitude: null, longitude: null })
+      transcriptRef.current = ''
+    }, [])
 
-  return {
-    isListening,
-    transcript,
-    parsed,
-    error,
-    startListening,
-    stopListening,
-    clearTranscript,
-    supportsSpeech: !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition),
-  }
+    return {
+      isListening,
+      aiParsing,
+      transcript,
+      parsed,
+      error,
+      startListening,
+      stopListening,
+      clearTranscript,
+      supportsSpeech: !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition),
+    }
 }
 
 export type UseSpeechToTextReturn = ReturnType<typeof useSpeechToText>
