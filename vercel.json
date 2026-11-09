@@ -1,8 +1,8 @@
 {
-  "buildCommand": "corepack enable pnpm && cd client && pnpm install && pnpm run build",
+  "buildCommand": "cd client && npm ci && npm run build",
   "outputDirectory": "client/dist",
-  "devCommand": "corepack enable pnpm && cd client && pnpm run dev",
-  "installCommand": "corepack enable pnpm && cd client && pnpm install",
+  "devCommand": "cd client && npm run dev",
+  "installCommand": "cd client && npm ci",
   "framework": "vite",
   "rewrites": [
     {
