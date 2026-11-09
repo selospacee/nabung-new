@@ -1,14 +1,13 @@
 {
-  "buildCommand": "pnpm install && pnpm run build",
-  "outputDirectory": "dist",
-  "devCommand": "pnpm run dev",
-  "installCommand": "pnpm install",
+  "buildCommand": "cd client && pnpm install && pnpm run build",
+  "outputDirectory": "client/dist",
+  "devCommand": "cd client && pnpm run dev",
+  "installCommand": "cd client && pnpm install",
   "framework": "vite",
-  "rootDirectory": "client",
   "rewrites": [
     {
       "source": "/(.*)",
-      "destination": "index.html"
+      "destination": "/index.html"
     }
   ]
 }
