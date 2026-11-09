@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
+import { useMemo } from 'react'
 import { cn } from '../../lib/utils'
 import {
   LayoutDashboard,
@@ -28,6 +29,9 @@ import {
 } from 'lucide-react'
 import { Button } from '../../components/ui'
 import { useState } from 'react'
+import { useCurrentUser } from '../../db/hooks'
+import { AddTransactionModal } from '../AddTransactionModal'
+import { useAccounts, useCategories, useDefaultAccount, useTransactions, useAccountBalances } from '../../db/hooks'
 
 const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
@@ -46,6 +50,25 @@ const MOBILE_NAV_ITEMS = [
 
 export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation()
+  const { user, userId } = useCurrentUser()
+  const accounts = useAccounts(userId)
+  const categories = useCategories(userId)
+  const defaultAccount = useDefaultAccount()
+  const transactions = useTransactions(userId)
+  const balances = useAccountBalances(userId)
+  
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [modalKey, setModalKey] = useState(0)
+
+  const handleTransactionAdded = () => {
+    // Close modal and reset for next use
+    setShowAddModal(false)
+    setModalKey(k => k + 1)
+  }
+
+  const accountsWithBalance = useMemo(() => {
+    return (accounts || []).map(a => ({ ...a, balance: balances[a.id] || 0 }))
+  }, [accounts, balances])
 
   return (
     <div className="min-h-screen flex">
@@ -123,15 +146,15 @@ export function AppShell({ children }: { children: ReactNode }) {
                                     </NavLink>
                                     {/* Center Add Transaction button - 3rd position */}
                                                                         {index === 1 && (
-                                                                          <Button
-                                                                            onClick={() => window.location.href = '/transactions/new?autoOpen=camera'}
-                                                                            className="flex flex-col items-center gap-1 rounded-full bg-primary text-primary-foreground shadow-lg"
-                                                                            size="icon"
-                                                                            style={{ transform: 'translateY(-50%)', marginTop: '-12px', zIndex: 10 }}
-                                                                          >
-                                                                            <Plus className="w-6 h-6" />
-                                                                          </Button>
-                                                                        )}
+                                                                                                                                                  <Button
+                                                                                                                                                    onClick={() => setShowAddModal(true)}
+                                                                                                                                                    className="flex flex-col items-center gap-1 rounded-full bg-primary text-primary-foreground shadow-lg"
+                                                                                                                                                    size="icon"
+                                                                                                                                                    style={{ transform: 'translateY(-50%)', marginTop: '-12px', zIndex: 10 }}
+                                                                                                                                                  >
+                                                                                                                                                    <Plus className="w-6 h-6" />
+                                                                                                                                                  </Button>
+                                                                                                                                                )}
                                   </>
                                 )
                               })}
@@ -150,10 +173,24 @@ export function AppShell({ children }: { children: ReactNode }) {
           </h2>
         </div>
         {children}
-      </main>
-    </div>
-  )
-}
+              </main>
+
+              {/* Add Transaction Modal */}
+              <AddTransactionModal
+                key={modalKey}
+                open={showAddModal}
+                onClose={() => setShowAddModal(false)}
+                user={user}
+                userId={userId || ''}
+                accounts={accounts || []}
+                categories={categories || []}
+                defaultAccount={defaultAccount}
+                transactions={transactions || []}
+                onTransactionAdded={handleTransactionAdded}
+              />
+            </div>
+          )
+        }
 
 function toggleTheme() {
   const html = document.documentElement
