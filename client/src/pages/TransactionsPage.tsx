@@ -178,17 +178,18 @@ export function TransactionsPage() {
             }, [])
 
               // Open camera directly when Receipt button clicked
-              const openCameraDirect = useCallback(async () => {
-                setCameraOpen(true)
-                try {
-                  const stream = await navigator.mediaDevices.getUserMedia({ video: true })
-                  if (cameraRef.current) {
-                    cameraRef.current.srcObject = stream
-                  }
-                } catch {
-                  alert('Camera access denied. Try uploading a photo instead.')
-                }
-              }, [])
+                            const openCameraDirect = useCallback(async () => {
+                              setCameraOpen(true)
+                              try {
+                                const stream = await navigator.mediaDevices.getUserMedia({ video: true })
+                                if (cameraRef.current) {
+                                  cameraRef.current.srcObject = stream
+                                  setHasStream(true)
+                                }
+                              } catch {
+                                alert('Camera access denied. Try uploading a photo instead.')
+                              }
+                            }, [])
 
               // Receipt OCR
     const ocrCtx = useReceiptOcr()
@@ -196,8 +197,9 @@ export function TransactionsPage() {
   const [ocrResult, setOcrResult] = useState<any>(null)
   const [receiptImage, setReceiptImage] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const cameraRef = useRef<HTMLVideoElement>(null)
-  const [cameraOpen, setCameraOpen] = useState(false)
+    const cameraRef = useRef<HTMLVideoElement>(null)
+    const [cameraOpen, setCameraOpen] = useState(false)
+    const [hasStream, setHasStream] = useState(false)
 
   const currency = user?.currency || 'IDR'
 
@@ -1136,53 +1138,53 @@ export function TransactionsPage() {
       </Dialog>
 
       {/* Camera dialog */}
-            <Dialog open={cameraOpen} onClose={() => { setCameraOpen(false); }}>
-              <div className="p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold">Take Photo</h3>
-                  <Button variant="ghost" size="icon" onClick={() => { setCameraOpen(false); if (cameraRef.current && cameraRef.current.srcObject instanceof MediaStream) cameraRef.current.srcObject.getTracks()[0]?.stop() }}>
-                    <X className="w-5 h-5" />
-                  </Button>
-                </div>
+                  <Dialog open={cameraOpen} onClose={() => { setCameraOpen(false); setHasStream(false); if (cameraRef.current && cameraRef.current.srcObject instanceof MediaStream) cameraRef.current.srcObject.getTracks()[0]?.stop() }}>
+                    <div className="p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold">Take Photo</h3>
+                        <Button variant="ghost" size="icon" onClick={() => { setCameraOpen(false); setHasStream(false); if (cameraRef.current && cameraRef.current.srcObject instanceof MediaStream) cameraRef.current.srcObject.getTracks()[0]?.stop() }}>
+                          <X className="w-5 h-5" />
+                        </Button>
+                      </div>
 
-          {cameraRef.current ? (
-            <div className="relative rounded-lg overflow-hidden border border-border bg-black aspect-video">
-              <video ref={cameraRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-              <button
-                onClick={handleCameraCapture}
-                className="absolute bottom-4 right-4 w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-lg"
-              >
-                <div className="w-10 h-10 rounded-full border-2 border-primary" />
-              </button>
-              <button
-                onClick={() => { setCameraOpen(false); if (cameraRef.current && cameraRef.current.srcObject instanceof MediaStream) cameraRef.current.srcObject.getTracks()[0]?.stop() }}
-                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <Button onClick={async () => {
-                try {
-                  const stream = await navigator.mediaDevices.getUserMedia({ video: true })
-                  if (cameraRef.current) {
-                    cameraRef.current.srcObject = stream
-                    setCameraOpen(true)
-                  }
-                } catch {
-                  alert('Camera access denied. Try uploading a photo instead.')
-                }
-              }}>
-                <Camera className="w-4 h-4 mr-2" /> Open Camera
-              </Button>
-              <p className="text-xs text-muted-foreground">
-                Or drag & drop an image below, or use the file upload button above.
-              </p>
-            </div>
-          )}
-        </div>
-      </Dialog>
+                {hasStream && cameraRef.current ? (
+                  <div className="relative rounded-lg overflow-hidden border border-border bg-black aspect-video">
+                    <video ref={cameraRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                    <button
+                      onClick={handleCameraCapture}
+                      className="absolute bottom-4 right-4 w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-lg"
+                    >
+                      <div className="w-10 h-10 rounded-full border-2 border-primary" />
+                    </button>
+                    <button
+                      onClick={() => { setCameraOpen(false); setHasStream(false); if (cameraRef.current && cameraRef.current.srcObject instanceof MediaStream) cameraRef.current.srcObject.getTracks()[0]?.stop() }}
+                      className="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <Button onClick={async () => {
+                      try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ video: true })
+                        if (cameraRef.current) {
+                          cameraRef.current.srcObject = stream
+                          setHasStream(true)
+                        }
+                      } catch {
+                        alert('Camera access denied. Try uploading a photo instead.')
+                      }
+                    }}>
+                      <Camera className="w-4 h-4 mr-2" /> Open Camera
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      Or drag & drop an image below, or use the file upload button above.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </Dialog>
 
       {/* Drag and drop zone */}
       {!cameraOpen && !showReceiptDialog && (
