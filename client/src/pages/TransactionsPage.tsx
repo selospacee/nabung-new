@@ -1156,23 +1156,23 @@ export function TransactionsPage() {
                         </Button>
                       </div>
 
-                {hasStream && cameraRef.current ? (
-                  <div className="relative rounded-lg overflow-hidden border border-border bg-black aspect-video">
-                    <video ref={cameraRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                    <button
-                      onClick={handleCameraCapture}
-                      className="absolute bottom-4 right-4 w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-lg"
-                    >
-                      <div className="w-10 h-10 rounded-full border-2 border-primary" />
-                    </button>
-                    <button
-                      onClick={() => { setCameraOpen(false); setHasStream(false); if (cameraRef.current && cameraRef.current.srcObject instanceof MediaStream) cameraRef.current.srcObject.getTracks()[0]?.stop() }}
-                      className="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ) : (
+                {hasStream ? (
+                                  <div className="relative rounded-lg overflow-hidden border border-border bg-black aspect-video">
+                                    <video ref={cameraRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                                    <button
+                                      onClick={handleCameraCapture}
+                                      className="absolute bottom-4 right-4 w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-lg"
+                                    >
+                                      <div className="w-10 h-10 rounded-full border-2 border-primary" />
+                                    </button>
+                                    <button
+                                      onClick={() => { setCameraOpen(false); setHasStream(false); if (cameraRef.current && cameraRef.current.srcObject instanceof MediaStream) cameraRef.current.srcObject.getTracks()[0]?.stop() }}
+                                      className="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                ) : (
                   <div className="space-y-4">
                     <Button onClick={async () => {
                       try {
