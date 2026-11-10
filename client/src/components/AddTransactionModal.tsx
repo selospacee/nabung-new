@@ -128,15 +128,76 @@ export function AddTransactionModal({
   // Geocoding state
   const [geocoding, setGeocoding] = useState(false)
   const getCurrentLocationFromAddress = useCallback(async (address: string) => {
-    if (!address || address.trim() === '') return
+    // If no address provided, use browser Geolocation API
+    if (!address || address.trim() === '') {
+      if (!navigator.geolocation) {
+        alert('Geolocation is not supported by your browser.')
+        return
+      }
+      setGeocoding(true)
+      try {
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+          })
+        })
+        const { latitude, longitude } = position.coords
+        
+        // Reverse geocode to get address
+        const googleApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+        let response: Response
+        let data: any
+        
+        if (googleApiKey) {
+          response = await fetch(
+            `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${googleApiKey}`
+          )
+          data = await response.json()
+          if (data.status === 'OK' && data.results.length > 0) {
+            const formattedAddress = data.results[0].formatted_address
+            setForm(f => ({
+              ...f,
+              latitude,
+              longitude,
+              location: formattedAddress,
+            }))
+            setGeocoding(false)
+            return
+          }
+        }
+        
+        // Fallback to Nominatim reverse geocoding
+        response = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`
+        )
+        data = await response.json()
+        if (data && data.display_name) {
+          setForm(f => ({
+            ...f,
+            latitude,
+            longitude,
+            location: data.display_name,
+          }))
+        }
+      } catch (error) {
+        console.warn('Could not get current location:', error)
+        alert('Unable to get your location. Please ensure location access is enabled.')
+      } finally {
+        setGeocoding(false)
+      }
+      return
+    }
+    
+    // Original geocoding logic for address search
     setGeocoding(true)
-
     try {
       // Try Google Maps Geocoding API first (if API key is available)
       const googleApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
       let response: Response
       let data: any
-
+      
       if (googleApiKey) {
         // Use Google Maps Geocoding API
         response = await fetch(
@@ -158,7 +219,7 @@ export function AddTransactionModal({
           return
         }
       }
-
+      
       // Fallback to Nominatim (OpenStreetMap)
       response = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&addressdetails=1`
@@ -671,7 +732,7 @@ export function AddTransactionModal({
                   ))}
                 </div>
               </div>
-
+              
               {/* Amount and Date */}
               <div className="grid grid-cols-2 gap-3">
                 <Input
@@ -690,7 +751,7 @@ export function AddTransactionModal({
                   onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
                 />
               </div>
-
+              
               {/* Account */}
               <Select
                 label="Account"
@@ -701,7 +762,7 @@ export function AddTransactionModal({
                   <option key={a.id} value={a.id}>{a.name} ({formatCurrency(a.balance || 0, currency)})</option>
                 ))}
               </Select>
-
+              
               {/* Category */}
               <Select
                 label="Category"
@@ -723,7 +784,7 @@ export function AddTransactionModal({
                   </option>
                 ))}
               </Select>
-
+              
               {/* Description */}
               <Input
                 label="Description"
@@ -731,9 +792,9 @@ export function AddTransactionModal({
                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                 placeholder="What was this for?"
               />
-
+              
               {/* Location */}
-                            <div>
+              <div>
                 <Input
                   label="Location"
                   value={form.location}
@@ -744,15 +805,15 @@ export function AddTransactionModal({
                   variant="outline"
                   size="sm"
                   className="mt-2 w-full"
-                  disabled={geocoding || !form.location || form.location.trim() === ''}
+                  disabled={geocoding}
                   type="button"
                   onClick={() => getCurrentLocationFromAddress(form.location)}
                 >
                   {geocoding ? 'Searching...' : 'Search Location'}
-                                  </Button>
-                                </div>
+                </Button>
+              </div>
               
-                                <Textarea
+              <Textarea
                 label="Notes (optional)"
                 placeholder="Additional notes..."
                 value={form.notes}
@@ -850,4 +911,3 @@ export function AddTransactionModal({
     </Dialog>
   )
 }
-
