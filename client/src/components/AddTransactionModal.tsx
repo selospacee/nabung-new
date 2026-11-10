@@ -721,16 +721,8 @@ export function AddTransactionModal({
                 placeholder="What was this for?"
               />
 
-              {/* Notes */}
-              <Textarea
-                label="Notes"
-                value={form.notes}
-                onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                placeholder="Additional notes..."
-              />
-
               {/* Location */}
-              <div>
+                            <div>
                 <Input
                   label="Location"
                   value={form.location}
