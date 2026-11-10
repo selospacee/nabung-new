@@ -10,7 +10,7 @@ import {
   Plus, Search, Filter, X, Edit3, Trash2, Receipt, Mic, Wallet, Briefcase, Laptop,
   ChevronDown, ChevronUp, DollarSign, CreditCard, Banknote, PiggyBank,
   TrendingUp, TrendingDown, ArrowRightLeft, MoreHorizontal, Building2,
-  Car, ShoppingBag, Utensils, FileText, Heart, Film, GraduationCap, Package, Camera, MapPin, RefreshCw, Loader2, User, Users, Calendar
+  Car, ShoppingBag, Utensils, FileText, Heart, Film, GraduationCap, Package, Camera, MapPin, RefreshCw, Loader2, User, Users, Calendar, RotateCcw
 } from 'lucide-react'
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import { useReceiptOcr } from '../hooks/useReceiptOcr'
@@ -64,6 +64,9 @@ export function AddTransactionModal({
   const cameraRef = useRef<HTMLVideoElement>(null)
   const [cameraOpen, setCameraOpen] = useState(false)
   const [hasStream, setHasStream] = useState(false)
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment')
+  const [zoomLevel, setZoomLevel] = useState(1)
+  const [maxZoom, setMaxZoom] = useState(1)
   
   // Receipt OCR state
   const ocrCtx = useReceiptOcr()
@@ -104,15 +107,55 @@ export function AddTransactionModal({
   const openCamera = useCallback(async () => {
     setCameraOpen(true)
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true })
+      const constraints: MediaStreamConstraints = {
+        video: {
+          facingMode: { ideal: facingMode },
+        }
+      }
+      const stream = await navigator.mediaDevices.getUserMedia(constraints)
       if (cameraRef.current) {
         cameraRef.current.srcObject = stream
         setHasStream(true)
+        
+        // Get max zoom capability
+        const track = stream.getVideoTracks()[0]
+        const capabilities = track.getCapabilities() as MediaTrackCapabilities & { zoom?: { min: number; max: number; step: number } }
+        if (capabilities.zoom) {
+          setMaxZoom(capabilities.zoom.max)
+        }
       }
     } catch {
       alert('Camera access denied. Try uploading a photo instead.')
     }
+  }, [facingMode])
+  
+  // Flip camera
+  const flipCamera = useCallback(() => {
+    setFacingMode(prev => prev === 'user' ? 'environment' : 'user')
+    setZoomLevel(1)
   }, [])
+  
+  // Handle zoom change
+  const handleZoomChange = useCallback((level: number) => {
+    setZoomLevel(Math.max(1, Math.min(level, maxZoom)))
+  }, [maxZoom])
+  
+  // Apply zoom to video track
+  const applyZoom = useCallback((level: number) => {
+    if (cameraRef.current?.srcObject instanceof MediaStream) {
+      const track = cameraRef.current.srcObject.getVideoTracks()[0]
+      const capabilities = track.getCapabilities() as MediaTrackCapabilities & { zoom?: { min: number; max: number; step: number } }
+      if (track && capabilities.zoom) {
+        track.applyConstraints({ advanced: [{ zoom: level }] } as unknown as MediaTrackConstraints)
+      }
+    }
+  }, [])
+  
+  useEffect(() => {
+    if (hasStream) {
+      applyZoom(zoomLevel)
+    }
+  }, [zoomLevel, hasStream, applyZoom])
   
   // Handle camera capture
   const handleCameraCapture = useCallback(async () => {
@@ -325,18 +368,49 @@ export function AddTransactionModal({
               <video ref={cameraRef} autoPlay playsInline muted className="w-full h-full object-cover" />
               {hasStream ? (
                 <>
-                  <button
-                    onClick={handleCameraCapture}
-                    className="absolute bottom-4 right-4 w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-lg"
-                  >
-                    <div className="w-10 h-10 rounded-full border-2 border-primary" />
-                  </button>
-                  <button
-                    onClick={() => { setCameraOpen(false); setHasStream(false); if (cameraRef.current && cameraRef.current.srcObject instanceof MediaStream) cameraRef.current.srcObject.getTracks()[0]?.stop() }}
-                    className="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+                  {/* Top controls: flip camera */}
+                  <div className="absolute top-4 left-4 right-4 flex justify-between">
+                    <button
+                      onClick={flipCamera}
+                      className="w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center shadow-lg backdrop-blur-sm"
+                      title="Flip camera"
+                    >
+                      <RotateCcw className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => { setCameraOpen(false); setHasStream(false); if (cameraRef.current && cameraRef.current.srcObject instanceof MediaStream) cameraRef.current.srcObject.getTracks().forEach(t => t.stop()) }}
+                      className="w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center shadow-lg backdrop-blur-sm"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  
+                  {/* Bottom controls: capture + zoom slider */}
+                  <div className="absolute bottom-4 left-4 right-4 flex flex-col items-center gap-3">
+                    <button
+                      onClick={handleCameraCapture}
+                      className="w-14 h-14 rounded-full bg-white flex items-center justify-center shadow-lg"
+                    >
+                      <div className="w-12 h-12 rounded-full border-2 border-primary" />
+                    </button>
+                    
+                    {maxZoom > 1 && (
+                      <div className="w-full max-w-xs px-2">
+                        <input
+                          type="range"
+                          min="1"
+                          max={maxZoom}
+                          step={0.1}
+                          value={zoomLevel}
+                          onChange={e => handleZoomChange(Number(e.target.value))}
+                          className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-primary"
+                        />
+                        <p className="text-xs text-white/80 text-center mt-1">
+                          Zoom: {zoomLevel.toFixed(1)}x
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </>
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/50">
