@@ -152,14 +152,14 @@ export function AppShell({ children }: { children: ReactNode }) {
                   </NavLink>
 
                   {/* Add Transaction button - slot 3 (center) */}
-                  <Button
-                    onClick={() => setShowAddModal(true)}
-                    className="flex flex-col items-center gap-1 rounded-full bg-primary text-primary-foreground shadow-lg"
-                    size="icon"
-                  >
-                    <Plus className="w-7 h-7" />
-                    <span className="text-[10px] font-medium">Add</span>
-                  </Button>
+                                    <Button
+                                      onClick={() => setShowAddModal(true)}
+                                      className="flex flex-col items-center gap-1 rounded-full bg-primary text-primary-foreground shadow-lg -mt-2"
+                                      size="icon"
+                                    >
+                                      <Plus className="w-7 h-7" />
+                                      <span className="text-[10px] font-medium">Add</span>
+                                    </Button>
 
                   {/* Reports - slot 4 */}
                   <NavLink
