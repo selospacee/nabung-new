@@ -128,6 +128,65 @@ export function AddTransactionModal({
   const currency = user?.currency || 'IDR'
   const cashiers = useCashiers(userId)
   
+  // Geocoding state
+  const [geocoding, setGeocoding] = useState(false)
+  const getCurrentLocationFromAddress = useCallback(async (address: string) => {
+    if (!address || address.trim() === '') return
+    setGeocoding(true)
+
+    try {
+      // Try Google Maps Geocoding API first (if API key is available)
+      const googleApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+      let response: Response
+      let data: any
+
+      if (googleApiKey) {
+        // Use Google Maps Geocoding API
+        response = await fetch(
+          `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${googleApiKey}`
+        )
+        data = await response.json()
+    
+        if (data.status === 'OK' && data.results.length > 0) {
+          const { lat, lng } = data.results[0].geometry.location
+          const formattedAddress = data.results[0].formatted_address
+      
+          setForm(f => ({
+            ...f,
+            latitude: lat,
+            longitude: lng,
+            location: formattedAddress,
+          }))
+          setGeocoding(false)
+          return
+        }
+      }
+
+      // Fallback to Nominatim (OpenStreetMap)
+      response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&addressdetails=1`
+      )
+      data = await response.json()
+  
+      if (data && data.length > 0) {
+        const { lat, lon, display_name } = data[0]
+        setForm(f => ({
+          ...f,
+          latitude: parseFloat(lat),
+          longitude: parseFloat(lon),
+          location: display_name || address,
+        }))
+      } else {
+        alert('No location found for that address. Try a different search term.')
+      }
+    } catch (error) {
+      console.warn('Could not get location from address:', error)
+      // Don't show error to user as this is a convenience feature
+    } finally {
+      setGeocoding(false)
+    }
+  }, [])
+  
   // Open camera and start stream
   const openCamera = useCallback(async () => {
     setCameraOpen(true)
@@ -590,94 +649,149 @@ export function AddTransactionModal({
           {/* Manual Tab */}
           <TabsContent value="manual" className="mt-4">
             <form onSubmit={handleFormSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <Select label="Type" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value as any }))}>
-                  <option value="income">Income</option>
-                  <option value="expense">Expense</option>
-                  <option value="transfer">Transfer</option>
-                </Select>
-                <Select label="Account" value={form.accountId} onChange={e => setForm(f => ({ ...f, accountId: e.target.value }))}>
-                  {accounts?.map(a => {
-                    const AccountIcon = ACCOUNT_ICONS[a.type]
-                    return (
-                      <option key={a.id} value={a.id}>
-                        {AccountIcon && <AccountIcon className="w-4 h-4 mr-1 inline" />}
-                        {a.name} ({a.type})
-                      </option>
-                    )
-                  })}
-                </Select>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-3">
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">
-                    {getCurrencySymbol(currency)}
-                  </span>
-                  <Input
-                    type="text"
-                    placeholder="Amount"
-                    value={form.amount}
-                    onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-                    className="pl-9 text-right font-mono"
-                    required
-                  />
-                </div>
-                <div className="relative">
-                  <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Select value={form.categoryId} onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))}>
-                    <option value="">Category</option>
-                    {categories?.filter(c => c.type !== 'transfer' || form.type === 'transfer').map(c => {
-                      const CatIcon = CATEGORY_ICONS[c.icon]
-                      return (
-                        <option key={c.id} value={c.id}>
-                          {CatIcon && <CatIcon className="w-4 h-4 mr-1 inline" />}
-                          {c.name}
-                        </option>
-                      )
-                    })}
-                  </Select>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-3">
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    type="date"
-                    value={form.date}
-                    onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-                    className="pl-9"
-                    required
-                  />
-                </div>
-                <Select label="Cashier (optional)" value={form.cashierId} onChange={e => setForm(f => ({ ...f, cashierId: e.target.value }))}>
-                  <option value="">No cashier</option>
-                  {cashiers?.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+              {/* Type selector - segmented buttons */}
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">Type</label>
+                <div className="flex gap-2" role="radiogroup">
+                  {(['income', 'expense', 'transfer'] as const).map(type => (
+                    <Button
+                      key={type}
+                      type="button"
+                      variant={form.type === type ? 'default' : 'outline'}
+                      className="flex-1 capitalize"
+                      onClick={() => setForm(f => ({ ...f, type }))}
+                    >
+                      {type}
+                    </Button>
                   ))}
-                </Select>
+                </div>
               </div>
-              
-              <div className="relative">
-                <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+
+              {/* Amount and Date */}
+              <div className="grid grid-cols-2 gap-3">
                 <Input
+                  label="Amount"
                   type="text"
-                  placeholder="Description (e.g., Nasi Goreng)"
-                  value={form.description}
-                  onChange={e => setForm(f => ({ ...f, description: e.target.value, merchant: e.target.value }))}
-                  className="pl-9"
+                  inputMode="decimal"
+                  value={form.amount}
+                  onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+                  placeholder="0.00"
+                  autoFocus
+                />
+                <Input
+                  label="Date"
+                  type="date"
+                  value={form.date}
+                  onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
                 />
               </div>
-              
-              <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+
+              {/* Account */}
+              <Select
+                label="Account"
+                value={form.accountId}
+                onChange={e => setForm(f => ({ ...f, accountId: e.target.value }))}
+              >
+                {accounts?.map(a => (
+                  <option key={a.id} value={a.id}>{a.name} ({formatCurrency(a.balance || 0, currency)})</option>
+                ))}
+              </Select>
+
+              {/* Category */}
+              <Select
+                label="Category"
+                value={form.categoryId}
+                onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))}
+              >
+                <option value="">Select category</option>
+                {categories?.filter(c => {
+                  if (form.type === 'transfer') return c.type === 'transfer'
+                  if (form.type === 'income') return c.type === 'income'
+                  if (form.type === 'expense') return c.type === 'expense'
+                  return c.type !== 'transfer'
+                }).map(c => (
+                  <option key={c.id} value={c.id}>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: c.color }} />
+                      {c.name}
+                    </span>
+                  </option>
+                ))}
+              </Select>
+
+              {/* Cashier */}
+              <Select
+                label="Cashier"
+                value={form.cashierId}
+                onChange={e => setForm(f => ({ ...f, cashierId: e.target.value }))}
+              >
+                <option value="">Select cashier (optional)</option>
+                {cashiers?.map(c => (
+                  <option key={c.id} value={c.id}>{c.name} ({c.role})</option>
+                ))}
+              </Select>
+
+              {/* Merchant */}
+              <Input
+                label="Merchant"
+                value={form.merchant}
+                onChange={e => setForm(f => ({ ...f, merchant: e.target.value }))}
+                placeholder="e.g. Starbucks"
+              />
+
+              {/* Description */}
+              <Input
+                label="Description"
+                value={form.description}
+                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                placeholder="What was this for?"
+              />
+
+              {/* Notes */}
+              <Textarea
+                label="Notes"
+                value={form.notes}
+                onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                placeholder="Additional notes..."
+              />
+
+              {/* Location */}
+              <div>
                 <Input
-                  type="text"
-                  placeholder="Location (optional)"
+                  label="Location"
                   value={form.location}
                   onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
-                  className="pl-9"
+                  placeholder="e.g. Starbucks Main Street"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 w-full"
+                  disabled={geocoding || !form.location || form.location.trim() === ''}
+                  type="button"
+                  onClick={() => getCurrentLocationFromAddress(form.location)}
+                >
+                  {geocoding ? 'Searching...' : 'Search Location'}
+                </Button>
+              </div>
+
+              {/* Latitude & Longitude */}
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Latitude"
+                  type="number"
+                  step="any"
+                  value={form.latitude?.toString() || ''}
+                  onChange={e => setForm(f => ({ ...f, latitude: e.target.value ? parseFloat(e.target.value) : null }))}
+                  placeholder="Auto-filled"
+                />
+                <Input
+                  label="Longitude"
+                  type="number"
+                  step="any"
+                  value={form.longitude?.toString() || ''}
+                  onChange={e => setForm(f => ({ ...f, longitude: e.target.value ? parseFloat(e.target.value) : null }))}
+                  placeholder="Auto-filled"
                 />
               </div>
               
