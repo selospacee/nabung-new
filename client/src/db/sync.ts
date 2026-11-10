@@ -174,7 +174,11 @@ interface PushResult {
 export async function pushLocalChangesToSupabase(userId: string): Promise<PushResult> {
   validateUserId(userId)
   console.log('[Sync] Pushing local changes for user:', userId)
-
+  
+  // Debug: check auth state
+  const { data: { session } } = await supabase.auth.getSession()
+  console.log('[Sync] Supabase session:', session?.user?.id || 'none')
+  
   const errors: Array<{ table: string; message: string }> = []
 
   try {
@@ -209,10 +213,12 @@ export async function pushLocalChangesToSupabase(userId: string): Promise<PushRe
 
     // Push transactions
     const localTransactions = await db.transactions.where('userId').equals(userId).toArray()
+    console.log('[Sync] Found local transactions:', localTransactions.length)
     for (const transaction of localTransactions) {
       const snakeTransaction = toSnakeCase(transaction as unknown as Record<string, unknown>)
       snakeTransaction.user_id = userId
       const cleanPayload = stripToAllowedKeys(snakeTransaction, 'transactions')
+      console.log('[Sync] Upserting transaction:', cleanPayload)
       const { error } = await supabase.from('transactions').upsert(cleanPayload)
       if (error) {
         const msg = formatSupabaseError(error)
