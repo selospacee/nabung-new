@@ -321,32 +321,31 @@ export function AddTransactionModal({
           
           {/* Camera Tab */}
           <TabsContent value="camera" className="mt-4 space-y-4">
-            {hasStream ? (
-              <div className="relative rounded-lg overflow-hidden border border-border bg-black aspect-video">
-                <video ref={cameraRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                <button
-                  onClick={handleCameraCapture}
-                  className="absolute bottom-4 right-4 w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-lg"
-                >
-                  <div className="w-10 h-10 rounded-full border-2 border-primary" />
-                </button>
-                <button
-                  onClick={() => { setCameraOpen(false); setHasStream(false); if (cameraRef.current && cameraRef.current.srcObject instanceof MediaStream) cameraRef.current.srcObject.getTracks()[0]?.stop() }}
-                  className="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <Button onClick={openCamera} className="w-full">
-                  <Camera className="w-4 h-4 mr-2" /> Open Camera
-                </Button>
-                <p className="text-xs text-muted-foreground text-center">
-                  Or drag & drop an image below, or use the file upload button.
-                </p>
-              </div>
-            )}
+            <div className="relative rounded-lg overflow-hidden border border-border bg-black aspect-video">
+              <video ref={cameraRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+              {hasStream ? (
+                <>
+                  <button
+                    onClick={handleCameraCapture}
+                    className="absolute bottom-4 right-4 w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-lg"
+                  >
+                    <div className="w-10 h-10 rounded-full border-2 border-primary" />
+                  </button>
+                  <button
+                    onClick={() => { setCameraOpen(false); setHasStream(false); if (cameraRef.current && cameraRef.current.srcObject instanceof MediaStream) cameraRef.current.srcObject.getTracks()[0]?.stop() }}
+                    className="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </>
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                  <Button variant="outline" onClick={openCamera} className="w-auto">
+                    <Camera className="w-4 h-4 mr-2" /> Open Camera
+                  </Button>
+                </div>
+              )}
+            </div>
             
             {/* Drag and drop zone */}
             <div
