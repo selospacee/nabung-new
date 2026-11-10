@@ -154,11 +154,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                   {/* Add Transaction button - slot 3 (center) */}
                                     <Button
                                       onClick={() => setShowAddModal(true)}
-                                      className="flex flex-col items-center gap-1 rounded-full bg-primary text-primary-foreground shadow-lg -mt-2"
+                                      className="flex flex-col items-center gap-1 rounded-full bg-primary text-primary-foreground shadow-lg -mt-12"
                                       size="icon"
                                     >
-                                      <Plus className="w-7 h-7" />
-                                      <span className="text-[10px] font-medium">Add</span>
+                                      <Plus className="w-8 h-8" />
                                     </Button>
 
                   {/* Reports - slot 4 */}
