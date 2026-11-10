@@ -364,52 +364,54 @@ export function AddTransactionModal({
           
           {/* Camera Tab */}
           <TabsContent value="camera" className="mt-4 space-y-4">
-            <div className="relative rounded-lg overflow-hidden border border-border bg-black aspect-video">
+            <div className="relative rounded-lg overflow-hidden border border-border bg-black aspect-[9/16]">
               <video ref={cameraRef} autoPlay playsInline muted className="w-full h-full object-cover" />
               {hasStream ? (
                 <>
                   {/* Top controls: flip camera */}
-                  <div className="absolute top-4 left-4 right-4 flex justify-between">
+                  <div className="absolute top-4 left-4 right-4 flex justify-between pointer-events-none">
                     <button
                       onClick={flipCamera}
-                      className="w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center shadow-lg backdrop-blur-sm"
+                      className="w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center shadow-lg backdrop-blur-sm pointer-events-auto"
                       title="Flip camera"
                     >
                       <RotateCcw className="w-5 h-5" />
                     </button>
                     <button
                       onClick={() => { setCameraOpen(false); setHasStream(false); if (cameraRef.current && cameraRef.current.srcObject instanceof MediaStream) cameraRef.current.srcObject.getTracks().forEach(t => t.stop()) }}
-                      className="w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center shadow-lg backdrop-blur-sm"
+                      className="w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center shadow-lg backdrop-blur-sm pointer-events-auto"
                     >
                       <X className="w-5 h-5" />
                     </button>
                   </div>
                   
-                  {/* Bottom controls: capture + zoom slider */}
-                  <div className="absolute bottom-4 left-4 right-4 flex flex-col items-center gap-3">
-                    <button
-                      onClick={handleCameraCapture}
-                      className="w-14 h-14 rounded-full bg-white flex items-center justify-center shadow-lg"
-                    >
-                      <div className="w-12 h-12 rounded-full border-2 border-primary" />
-                    </button>
-                    
-                    {maxZoom > 1 && (
-                      <div className="w-full max-w-xs px-2">
-                        <input
-                          type="range"
-                          min="1"
-                          max={maxZoom}
-                          step={0.1}
-                          value={zoomLevel}
-                          onChange={e => handleZoomChange(Number(e.target.value))}
-                          className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-primary"
-                        />
-                        <p className="text-xs text-white/80 text-center mt-1">
-                          Zoom: {zoomLevel.toFixed(1)}x
-                        </p>
-                      </div>
-                    )}
+                  {/* Bottom controls: capture + zoom slider - positioned below viewfinder */}
+                  <div className="absolute bottom-0 left-0 right-0 p-4 pointer-events-none">
+                    <div className="flex flex-col items-center gap-3 pointer-events-auto">
+                      <button
+                        onClick={handleCameraCapture}
+                        className="w-16 h-16 rounded-full bg-white flex items-center justify-center shadow-xl ring-4 ring-white/20"
+                      >
+                        <div className="w-12 h-12 rounded-full border-2 border-primary" />
+                      </button>
+                      
+                      {maxZoom > 1 && (
+                        <div className="w-full max-w-xs px-2">
+                          <input
+                            type="range"
+                            min="1"
+                            max={maxZoom}
+                            step={0.1}
+                            value={zoomLevel}
+                            onChange={e => handleZoomChange(Number(e.target.value))}
+                            className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-primary"
+                          />
+                          <p className="text-xs text-white/80 text-center mt-1">
+                            Zoom: {zoomLevel.toFixed(1)}x
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </>
               ) : (
