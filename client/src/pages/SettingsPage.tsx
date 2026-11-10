@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { useSupabaseAuth } from '../auth/SupabaseAuthContext'
 import { useCurrentUser, useCurrentUser as useCU } from '../db/hooks'
 import { db } from '../db'
+import { syncUserDataFromSupabase, pushLocalChangesToSupabase } from '../db/sync'
 import { cn, Card, CardHeader, CardTitle, CardContent, Button, Input, Select, Alert, Progress, EmptyState } from '../components/ui'
 import { formatCurrency } from '../utils/currency'
-import { TrendingUp, User, Mail, DollarSign, Globe, Shield, Database, Download, Upload, Trash2, Moon, Sun, Monitor } from 'lucide-react'
+import { TrendingUp, User, Mail, DollarSign, Globe, Shield, Database, Download, Upload, Trash2, Moon, Sun, Monitor, RefreshCw, CloudUpload, CloudDownload, AlertCircle, CheckCircle } from 'lucide-react'
 import { differenceInYears } from 'date-fns'
 
 export function SettingsPage() {
@@ -14,8 +15,40 @@ export function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [exporting, setExporting] = useState(false)
+  const [syncing, setSyncing] = useState<'push' | 'pull' | 'idle'>('idle')
+  const [syncResult, setSyncResult] = useState<{ success: boolean; message: string; errors?: any[] } | null>(null)
 
   const currency = user?.currency || 'IDR'
+
+  const handleSync = async (direction: 'push' | 'pull') => {
+    if (!user?.id) return
+    setSyncing(direction)
+    setSyncResult(null)
+    try {
+      if (direction === 'push') {
+        const result = await pushLocalChangesToSupabase(user.id)
+        setSyncResult({
+          success: result.success,
+          message: result.success ? 'Push to Supabase completed' : 'Push failed',
+          errors: result.errors
+        })
+      } else {
+        await syncUserDataFromSupabase(user.id)
+        setSyncResult({
+          success: true,
+          message: 'Pull from Supabase completed'
+        })
+      }
+    } catch (err: any) {
+      setSyncResult({
+        success: false,
+        message: err.message || 'Sync failed',
+        errors: [{ table: 'unknown', message: err.message }]
+      })
+    } finally {
+      setSyncing('idle')
+    }
+  }
 
   const handleUpdateProfile = async (data: any) => {
     setSaving(true)
@@ -195,42 +228,121 @@ export function SettingsPage() {
         <div className="space-y-4">
           {/* Export/Import */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Database className="w-4 h-4" /> Data Management
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-3">
-                <Button variant="outline" onClick={handleExport} disabled={exporting}>
-                  <Download className="w-4 h-4 mr-2" />
-                  Export All Data (JSON)
-                </Button>
-                <Button variant="outline" onClick={handleImport}>
-                  <Upload className="w-4 h-4 mr-2" />
-                  Import Data (JSON)
-                </Button>
-              </div>
+                      <CardHeader>
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Database className="w-4 h-4" /> Data Management
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex flex-wrap gap-3">
+                          <Button variant="outline" onClick={handleExport} disabled={exporting}>
+                            <Download className="w-4 h-4 mr-2" />
+                            Export All Data (JSON)
+                          </Button>
+                          <Button variant="outline" onClick={handleImport}>
+                            <Upload className="w-4 h-4 mr-2" />
+                            Import Data (JSON)
+                          </Button>
+                        </div>
 
-              {/* CSV export */}
-              <Button variant="ghost" className="ml-0 text-sm" onClick={() => {
-                window.location.href = '/reports'
-              }}>
-                <Download className="w-4 h-4 mr-1" />
-                Export Transactions to CSV
-              </Button>
+                        {/* CSV export */}
+                        <Button variant="ghost" className="ml-0 text-sm" onClick={() => {
+                          window.location.href = '/reports'
+                        }}>
+                          <Download className="w-4 h-4 mr-1" />
+                          Export Transactions to CSV
+                        </Button>
 
-              <div className="mt-4 p-3 rounded-lg bg-secondary text-sm text-muted-foreground">
-                <p className="font-medium text-foreground mb-1">Export formats:</p>
-                <ul className="list-disc list-inside space-y-0.5">
-                  <li><strong>JSON</strong> — Full backup (all tables, importable)</li>
-                  <li><strong>CSV</strong> — Transactions only, for spreadsheets</li>
-                </ul>
-              </div>
-            </CardContent>
-          </Card>
+                        <div className="mt-4 p-3 rounded-lg bg-secondary text-sm text-muted-foreground">
+                          <p className="font-medium text-foreground mb-1">Export formats:</p>
+                          <ul className="list-disc list-inside space-y-0.5">
+                            <li><strong>JSON</strong> — Full backup (all tables, importable)</li>
+                            <li><strong>CSV</strong> — Transactions only, for spreadsheets</li>
+                          </ul>
+                        </div>
+                      </CardContent>
+                    </Card>
 
-          {/* Danger zone */}
+                    {/* Supabase Sync */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <CloudUpload className="w-4 h-4" /> Supabase Sync
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="flex flex-wrap gap-3">
+                          <Button
+                            variant="outline"
+                            onClick={() => handleSync('push')}
+                            disabled={syncing !== 'idle'}
+                          >
+                            {syncing === 'push' ? (
+                              <>
+                                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                                Pushing...
+                              </>
+                            ) : (
+                              <>
+                                <CloudUpload className="w-4 h-4 mr-2" />
+                                Push Local to Supabase
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => handleSync('pull')}
+                            disabled={syncing !== 'idle'}
+                          >
+                            {syncing === 'pull' ? (
+                              <>
+                                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                                Pulling...
+                              </>
+                            ) : (
+                              <>
+                                <CloudDownload className="w-4 h-4 mr-2" />
+                                Pull from Supabase
+                              </>
+                            )}
+                          </Button>
+                        </div>
+
+                        {syncResult && (
+                          <Alert variant={syncResult.success ? 'success' : 'destructive'} className="gap-3">
+                            {syncResult.success ? (
+                              <CheckCircle className="w-4 h-4 text-success shrink-0" />
+                            ) : (
+                              <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium">{syncResult.message}</p>
+                              {syncResult.errors && syncResult.errors.length > 0 && (
+                                <div className="mt-2 text-xs text-muted-foreground">
+                                  <ul className="list-disc list-inside space-y-1 max-h-40 overflow-y-auto">
+                                    {syncResult.errors.map((e, i) => (
+                                      <li key={i}>{e.table}: {e.message}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          </Alert>
+                        )}
+
+                        <div className="p-3 rounded-lg bg-secondary text-sm text-muted-foreground">
+                          <p className="font-medium text-foreground mb-1">How sync works:</p>
+                          <ul className="list-disc list-inside space-y-0.5">
+                            <li><strong>Push</strong> — Upload local changes (transactions, accounts, etc.) to Supabase</li>
+                            <li><strong>Pull</strong> — Download latest data from Supabase to this device</li>
+                            <li>Auto-sync runs every 60s (push) and 30s (pull), plus on window focus</li>
+                            <li>If push fails, check console for RLS policy errors</li>
+                          </ul>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Danger zone */}
           <Card className="border-destructive/30">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2 text-destructive">
