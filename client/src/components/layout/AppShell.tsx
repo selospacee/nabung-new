@@ -118,45 +118,81 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      {/* Mobile bottom navigation */}
-                              <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden border-t border-border bg-card/95 backdrop-blur-sm">
-                                <div className="flex items-center justify-between px-2 py-1.5 w-full">
-                                  <div className="flex items-center justify-around w-full">
-                                    {MOBILE_NAV_ITEMS.map((item, index) => {
-                                      const Icon = item.icon
-                                      const isActive = item.end
-                                        ? location.pathname === item.to
-                                        : location.pathname.startsWith(item.to)
+      {/* Mobile bottom navigation: 5 slots (Dashboard, Budgets, +, Reports, Settings) */}
+            <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden border-t border-border bg-card/95 backdrop-blur-sm">
+              <div className="flex items-center justify-between px-2 py-1.5 w-full">
+                <div className="flex items-center justify-around w-full">
+                  {/* Dashboard - slot 1 */}
+                  <NavLink
+                    to="/"
+                    end
+                    className={cn(
+                      'flex flex-col items-center gap-1 px-2 py-2 rounded-lg text-xs font-medium transition-colors',
+                      location.pathname === '/'
+                        ? 'text-primary'
+                        : 'text-muted-foreground'
+                    )}
+                  >
+                    <LayoutDashboard className="w-5 h-5" />
+                    Dashboard
+                  </NavLink>
 
-                                      return (
-                                        <NavLink
-                                          key={item.to}
-                                          to={item.to}
-                                          end={item.end}
-                                          className={cn(
-                                            'flex flex-col items-center gap-1 px-2 py-2 rounded-lg text-xs font-medium transition-colors',
-                                            isActive
-                                              ? 'text-primary'
-                                              : 'text-muted-foreground'
-                                          )}
-                                        >
-                                          <Icon className="w-5 h-5" />
-                                          {item.label}
-                                        </NavLink>
-                                      )
-                                    })}
-                                  </div>
-                                </div>
-                              </nav>
+                  {/* Budgets - slot 2 */}
+                  <NavLink
+                    to="/budgets"
+                    className={cn(
+                      'flex flex-col items-center gap-1 px-2 py-2 rounded-lg text-xs font-medium transition-colors',
+                      location.pathname.startsWith('/budgets')
+                        ? 'text-primary'
+                        : 'text-muted-foreground'
+                    )}
+                  >
+                    <LineChart className="w-5 h-5" />
+                    Budgets
+                  </NavLink>
 
-                              {/* Floating Add Transaction button */}
-                              <Button
-                                onClick={() => setShowAddModal(true)}
-                                className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 lg:hidden rounded-full bg-primary text-primary-foreground shadow-lg"
-                                size="icon"
-                              >
-                                <Plus className="w-7 h-7" />
-                              </Button>
+                  {/* Add Transaction button - slot 3 (center) */}
+                  <Button
+                    onClick={() => setShowAddModal(true)}
+                    className="flex flex-col items-center gap-1 rounded-full bg-primary text-primary-foreground shadow-lg"
+                    size="icon"
+                  >
+                    <Plus className="w-7 h-7" />
+                    <span className="text-[10px] font-medium">Add</span>
+                  </Button>
+
+                  {/* Reports - slot 4 */}
+                  <NavLink
+                    to="/reports"
+                    className={cn(
+                      'flex flex-col items-center gap-1 px-2 py-2 rounded-lg text-xs font-medium transition-colors',
+                      location.pathname.startsWith('/reports')
+                        ? 'text-primary'
+                        : 'text-muted-foreground'
+                    )}
+                  >
+                    <PieChart className="w-5 h-5" />
+                    Reports
+                  </NavLink>
+
+                  {/* Settings - slot 5 */}
+                  <NavLink
+                    to="/settings"
+                    className={cn(
+                      'flex flex-col items-center gap-1 px-2 py-2 rounded-lg text-xs font-medium transition-colors',
+                      location.pathname.startsWith('/settings')
+                        ? 'text-primary'
+                        : 'text-muted-foreground'
+                    )}
+                  >
+                    <Settings className="w-5 h-5" />
+                    Settings
+                  </NavLink>
+                </div>
+              </div>
+            </nav>
+
+            {/* Remove floating FAB - now integrated in bottom nav */}
 
                               {/* Main content */}
             <main className="flex-1 p-4 lg:p-6 max-w-7xl w-full pb-20 lg:pb-0">
