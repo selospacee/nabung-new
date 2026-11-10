@@ -61,39 +61,41 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
   }, [])
 
   const fetchUserProfile = useCallback(async (userId: string, force = false) => {
-      // Skip if already loaded and not forced (prevents stale-closure duplicate fetch)
-      if (!force && loadedUserRef.current.has(userId)) {
-        console.log('[Auth] Profile already loaded for:', userId, '- skipping')
-        return
-      }
-      // Prevent duplicate concurrent fetches for the same user - but wait for existing one
-      let existingPromise = fetchPromisesRef.current.get(userId)
-      if (existingPromise && !force) {
-        console.log('[Auth] Already fetching profile for:', userId, '- waiting for existing')
-        try {
-          await existingPromise
-        } catch {
-          // Existing fetch failed, we'll retry below
-        }
-        // Check if user was set by the existing fetch
-        if (loadedUserRef.current.has(userId)) {
-          console.log('[Auth] Profile already loaded by existing fetch')
+        // Skip if already loaded and not forced (prevents stale-closure duplicate fetch)
+        if (!force && loadedUserRef.current.has(userId)) {
+          console.log('[Auth] Profile already loaded for:', userId, '- skipping')
           return
         }
-        // Existing fetch didn't set user, continue with our own fetch
-      }
-    
-      console.log('[Auth] Fetching profile for:', userId)
-            fetchingUserRef.current = userId
+        // Prevent duplicate concurrent fetches for the same user - but wait for existing one
+        let existingPromise = fetchPromisesRef.current.get(userId)
+        if (existingPromise && !force) {
+          console.log('[Auth] Already fetching profile for:', userId, '- waiting for existing')
+          try {
+            await existingPromise
+          } catch {
+            // Existing fetch failed, we'll retry below
+          }
+          // Check if user was set by the existing fetch
+          if (loadedUserRef.current.has(userId)) {
+            console.log('[Auth] Profile already loaded by existing fetch')
+            return
+          }
+          // Existing fetch didn't set user, continue with our own fetch
+        }
+   
+        console.log('[Auth] Fetching profile for:', userId)
+              fetchingUserRef.current = userId
+              // Mark as loading early to prevent duplicate fetches from auth state listener
+              loadedUserRef.current.add(userId)
 
-            // Create a promise that we can share with other callers
-            let resolvePromise: (value: void) => void
-            let rejectPromise: (reason: Error) => void
-            const promise = new Promise<void>((resolve, reject) => {
-              resolvePromise = resolve
-              rejectPromise = reject
-            })
-            fetchPromisesRef.current.set(userId, promise)
+              // Create a promise that we can share with other callers
+              let resolvePromise: (value: void) => void
+              let rejectPromise: (reason: Error) => void
+              const promise = new Promise<void>((resolve, reject) => {
+                resolvePromise = resolve
+                rejectPromise = reject
+              })
+              fetchPromisesRef.current.set(userId, promise)
     
       const safetyTimeout = setTimeout(() => {
         console.error('[Auth] Safety timeout (10s) - forcing isLoading=false')
@@ -277,13 +279,12 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
         setIsOnboarded(false)
         rejectPromise!(error as Error)
       } finally {
-              clearTimeout(safetyTimeout)
-              fetchPromisesRef.current.delete(userId)
-              fetchingUserRef.current = null
-              loadedUserRef.current.add(userId)
-              console.log('[Auth] fetchUserProfile done, setting isLoading=false')
-              setIsLoading(false)
-            }
+                    clearTimeout(safetyTimeout)
+                    fetchPromisesRef.current.delete(userId)
+                    fetchingUserRef.current = null
+                    console.log('[Auth] fetchUserProfile done, setting isLoading=false')
+                    setIsLoading(false)
+                  }
     }, [])
 
   useEffect(() => {
@@ -333,23 +334,25 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
       if (!mounted) return
       
       console.log('[Auth] Auth state change:', event, session?.user?.id)
-      if (event === 'SIGNED_IN' && session?.user) {
-        // Don't fetch if we already have this user loaded (use ref to avoid stale closure)
-        if (loadedUserRef.current.has(session.user.id) || user?.id === session.user.id) {
-          console.log('[Auth] User already loaded, skipping fetch')
-          // But still sync data from Supabase to local Dexie
-          await syncUserDataFromSupabase(session.user.id)
-          return
-        }
-        // Don't fetch if we're already loading or already fetched this user
-        if (!fetchPromisesRef.current.has(session.user.id)) {
-          await fetchUserProfile(session.user.id)
-          // Sync data from Supabase to local Dexie (skip if signUp is in progress)
-          if (!signUpInProgressRef.current.has(session.user.id)) {
-            await syncUserDataFromSupabase(session.user.id)
-            // NOTE: Don't push on sign-in - sync from Supabase is source of truth
-          }
-        }
+            if (event === 'SIGNED_IN' && session?.user) {
+              // Don't fetch if we already have this user loaded, currently fetching, or already in progress
+              if (loadedUserRef.current.has(session.user.id) || 
+                  fetchingUserRef.current === session.user.id ||
+                  user?.id === session.user.id) {
+                console.log('[Auth] User already loaded/fetching, skipping fetch')
+                // But still sync data from Supabase to local Dexie
+                await syncUserDataFromSupabase(session.user.id)
+                return
+              }
+              // Don't fetch if we're already loading or already fetched this user
+              if (!fetchPromisesRef.current.has(session.user.id)) {
+                await fetchUserProfile(session.user.id)
+                // Sync data from Supabase to local Dexie (skip if signUp is in progress)
+                if (!signUpInProgressRef.current.has(session.user.id)) {
+                  await syncUserDataFromSupabase(session.user.id)
+                  // NOTE: Don't push on sign-in - sync from Supabase is source of truth
+                }
+              }
       } else if (event === 'SIGNED_OUT') {
         console.log('[Auth] User signed out')
         setUser(null)

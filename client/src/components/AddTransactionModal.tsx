@@ -120,7 +120,9 @@ export function AddTransactionModal({
     longitude: null as number | null,
   })
   const [saving, setSaving] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
+    const [receiptSaving, setReceiptSaving] = useState(false)
+    const [voiceSaving, setVoiceSaving] = useState(false)
+    const [editingId, setEditingId] = useState<string | null>(null)
   const [showFormDialog, setShowFormDialog] = useState(false)
   
   const currency = user?.currency || 'IDR'
@@ -385,82 +387,92 @@ export function AddTransactionModal({
       setOcrResult(result)
       setShowReceiptDialog(true)
     }, [ocrCtx, setForm])
-  
-  // Confirm receipt transaction
-  const confirmReceiptTransaction = useCallback(async () => {
-    if (!ocrResult?.total || !ocrResult?.date) return
-    await addTransaction({
-      type: ocrResult.suggestedType || 'expense',
-      amount: ocrResult.total,
-      date: ocrResult.date,
-      categoryId: ocrResult.suggestedCategoryId || null,
-      accountId: defaultAccount?.id || (accounts?.[0]?.id || ''),
-      description: ocrResult.merchant || '',
-      merchant: ocrResult.merchant || '',
-      notes: '',
-      receiptImage: receiptImage,
-      receiptOcrText: ocrResult.text,
-      location: '',
-      latitude: null,
-      longitude: null,
-    })
-    setShowReceiptDialog(false)
-    setReceiptImage(null)
-    setOcrResult(null)
-    onClose()
-  }, [ocrResult, receiptImage, defaultAccount, accounts])
-  
-  // Voice entry confirmation
-  const confirmVoiceTransaction = useCallback(async () => {
-    if (!voiceCtx.parsed.amount || !voiceCtx.parsed.date) return
-    await addTransaction({
-      type: voiceCtx.parsed.suggestedType || 'expense',
-      amount: voiceCtx.parsed.amount,
-      date: voiceCtx.parsed.date,
-      categoryId: voiceCtx.parsed.suggestedCategoryId || null,
-      accountId: defaultAccount?.id || (accounts?.[0]?.id || ''),
-      description: voiceCtx.parsed.description || voiceCtx.parsed.merchant || '',
-      merchant: voiceCtx.parsed.merchant || '',
-      notes: '',
-      receiptImage: null,
-      receiptOcrText: null,
-      location: '',
-      latitude: null,
-      longitude: null,
-    })
-    voiceCtx.clearTranscript()
-    onClose()
-  }, [voiceCtx, defaultAccount, accounts])
-  
-  // Add transaction
-  const addTransaction = useCallback(async (tx: Partial<TxType> & { accountId: string; type: TxType['type']; amount: number; date: string }) => {
-    const id = uuid()
-    const now = new Date().toISOString()
-    await db.transactions.add({
-      id,
-      userId: userId!,
-      accountId: tx.accountId,
-      categoryId: tx.categoryId || null,
-      cashierId: null,
-      amount: tx.amount,
-      currency: currency,
-      type: tx.type,
-      date: tx.date,
-      description: tx.description || '',
-      merchant: tx.merchant || '',
-      notes: tx.notes || '',
-      receiptImage: tx.receiptImage || '',
-      receiptOcrText: tx.receiptOcrText || '',
-      location: tx.location || '',
-      latitude: tx.latitude ?? null,
-      longitude: tx.longitude ?? null,
-      createdAt: now,
-      updatedAt: now,
-      deletedAt: null,
-    })
-    await pushLocalChangesToSupabase(userId || '')
-    onTransactionAdded()
-  }, [userId, currency])
+
+      // Add transaction
+      const addTransaction = useCallback(async (tx: Partial<TxType> & { accountId: string; type: TxType['type']; amount: number; date: string }) => {
+        const id = uuid()
+        const now = new Date().toISOString()
+        await db.transactions.add({
+          id,
+          userId: userId!,
+          accountId: tx.accountId,
+          categoryId: tx.categoryId || null,
+          cashierId: null,
+          amount: tx.amount,
+          currency: currency,
+          type: tx.type,
+          date: tx.date,
+          description: tx.description || '',
+          merchant: tx.merchant || '',
+          notes: tx.notes || '',
+          receiptImage: tx.receiptImage || '',
+          receiptOcrText: tx.receiptOcrText || '',
+          location: tx.location || '',
+          latitude: tx.latitude ?? null,
+          longitude: tx.longitude ?? null,
+          createdAt: now,
+          updatedAt: now,
+          deletedAt: null,
+        })
+        await pushLocalChangesToSupabase(userId || '')
+        onTransactionAdded()
+      }, [userId, currency])
+
+      // Confirm receipt transaction
+        const confirmReceiptTransaction = useCallback(async () => {
+          if (!ocrResult?.total || !ocrResult?.date) return
+          setReceiptSaving(true)
+          try {
+            await addTransaction({
+              type: ocrResult.suggestedType || 'expense',
+              amount: ocrResult.total,
+              date: ocrResult.date,
+              categoryId: ocrResult.suggestedCategoryId || null,
+              accountId: defaultAccount?.id || (accounts?.[0]?.id || ''),
+              description: ocrResult.merchant || '',
+              merchant: ocrResult.merchant || '',
+              notes: '',
+              receiptImage: receiptImage,
+              receiptOcrText: ocrResult.text,
+              location: '',
+              latitude: null,
+              longitude: null,
+            })
+            setShowReceiptDialog(false)
+            setReceiptImage(null)
+            setOcrResult(null)
+            onClose()
+          } finally {
+            setReceiptSaving(false)
+          }
+        }, [ocrResult, receiptImage, defaultAccount, accounts, addTransaction])
+
+      // Voice entry confirmation
+        const confirmVoiceTransaction = useCallback(async () => {
+          if (!voiceCtx.parsed.amount || !voiceCtx.parsed.date) return
+          setVoiceSaving(true)
+          try {
+            await addTransaction({
+              type: voiceCtx.parsed.suggestedType || 'expense',
+              amount: voiceCtx.parsed.amount,
+              date: voiceCtx.parsed.date,
+              categoryId: voiceCtx.parsed.suggestedCategoryId || null,
+              accountId: defaultAccount?.id || (accounts?.[0]?.id || ''),
+              description: voiceCtx.parsed.description || voiceCtx.parsed.merchant || '',
+              merchant: voiceCtx.parsed.merchant || '',
+              notes: '',
+              receiptImage: null,
+              receiptOcrText: null,
+              location: '',
+              latitude: null,
+              longitude: null,
+            })
+            voiceCtx.clearTranscript()
+            onClose()
+          } finally {
+            setVoiceSaving(false)
+          }
+        }, [voiceCtx, defaultAccount, accounts, addTransaction])
   
   // Handle form submit
   const handleFormSubmit = useCallback(async (e: React.FormEvent) => {
@@ -515,11 +527,10 @@ export function AddTransactionModal({
   }, [defaultAccount, accounts])
   
   // Auto-open camera when modal opens on camera tab
-  useEffect(() => {
-    if (open && activeTab === 'camera' && !hasStream && !cameraOpen) {
-      openCamera()
-    }
-  }, [open, activeTab, hasStream, cameraOpen, openCamera])
+    useEffect(() => {
+      // Don't auto-open camera - wait for user to click "Open Camera" button
+      // This respects privacy - camera only starts on explicit user action
+    }, [])
   
   // Cleanup camera on close
     useEffect(() => {
@@ -758,10 +769,10 @@ export function AddTransactionModal({
                                     </Button>
                                     <Button
                                       size="sm"
-                                      disabled={!voiceCtx.parsed.amount || !voiceCtx.parsed.date}
+                                      disabled={!voiceCtx.parsed.amount || !voiceCtx.parsed.date || voiceSaving}
                                       onClick={confirmVoiceTransaction}
                                     >
-                                      Save Transaction
+                                      {voiceSaving ? 'Saving...' : 'Save Transaction'}
                                     </Button>
                                     <Button
                                       variant="outline"
@@ -981,10 +992,19 @@ export function AddTransactionModal({
                                             <Button
                                               variant="default"
                                               size="sm"
-                                              disabled={!ocrResult?.total}
+                                              disabled={!ocrResult?.total || receiptSaving}
                                               onClick={confirmReceiptTransaction}
                                             >
-                                              Save Transaction
+                                              {receiptSaving ? 'Saving...' : 'Save Transaction'}
+                                            </Button>
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              onClick={() => {
+                                                setShowReceiptDialog(false)
+                                              }}
+                                            >
+                                              Edit in Form
                                             </Button>
                                             <Button variant="ghost" size="sm" onClick={() => { setShowReceiptDialog(false); setOcrResult(null) }}>
                                               Clear OCR
