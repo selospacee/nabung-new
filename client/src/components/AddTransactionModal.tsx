@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { v4 as uuid } from 'uuid'
-import { useCurrentUser, useTransactions, useAccounts, useCategories, useDefaultAccount, useAccountBalances, useCashiers } from '../db/hooks'
+import { useCurrentUser, useTransactions, useAccounts, useCategories, useDefaultAccount, useAccountBalances } from '../db/hooks'
 import { cn, Card, CardHeader, CardTitle, CardContent, Button, Badge, Dialog, Input, Select, Textarea, EmptyState, Skeleton, Tabs, TabsList, TabsTrigger, TabsContent, Alert } from '../components/ui'
 import { formatCurrency, centsToDisplay, centsToDisplaySigned, displayToCents } from '../utils/currency'
 import { formatDate, toISODate } from '../utils/dates'
@@ -111,9 +111,7 @@ export function AddTransactionModal({
     date: toISODate(new Date()),
     categoryId: '',
     accountId: defaultAccount?.id || (accounts?.[0]?.id || ''),
-    cashierId: '',
     description: '',
-    merchant: '',
     notes: '',
     receiptImage: null as string | null,
     receiptOcrText: null as string | null,
@@ -126,7 +124,6 @@ export function AddTransactionModal({
   const [showFormDialog, setShowFormDialog] = useState(false)
   
   const currency = user?.currency || 'IDR'
-  const cashiers = useCashiers(userId)
   
   // Geocoding state
   const [geocoding, setGeocoding] = useState(false)
@@ -337,7 +334,7 @@ export function AddTransactionModal({
   }, [voiceCtx, defaultAccount, accounts])
   
   // Add transaction
-  const addTransaction = useCallback(async (tx: Partial<TxType> & { accountId: string; type: TxType['type']; amount: number; date: string; cashierId?: string }) => {
+  const addTransaction = useCallback(async (tx: Partial<TxType> & { accountId: string; type: TxType['type']; amount: number; date: string }) => {
     const id = uuid()
     const now = new Date().toISOString()
     await db.transactions.add({
@@ -345,7 +342,7 @@ export function AddTransactionModal({
       userId: userId!,
       accountId: tx.accountId,
       categoryId: tx.categoryId || null,
-      cashierId: tx.cashierId || null,
+      cashierId: null,
       amount: tx.amount,
       currency: currency,
       type: tx.type,
@@ -376,7 +373,6 @@ export function AddTransactionModal({
       type: form.type,
       amount: displayToCents(form.amount, currency),
       date: form.date,
-      cashierId: form.cashierId || undefined,
     } as any)
     setSaving(false)
     resetForm()
@@ -390,9 +386,7 @@ export function AddTransactionModal({
       date: toISODate(new Date()),
       categoryId: '',
       accountId: defaultAccount?.id || (accounts?.[0]?.id || ''),
-      cashierId: '',
       description: '',
-      merchant: '',
       notes: '',
       receiptImage: null,
       receiptOcrText: null,
@@ -718,26 +712,6 @@ export function AddTransactionModal({
                   </option>
                 ))}
               </Select>
-
-              {/* Cashier */}
-              <Select
-                label="Cashier"
-                value={form.cashierId}
-                onChange={e => setForm(f => ({ ...f, cashierId: e.target.value }))}
-              >
-                <option value="">Select cashier (optional)</option>
-                {cashiers?.map(c => (
-                  <option key={c.id} value={c.id}>{c.name} ({c.role})</option>
-                ))}
-              </Select>
-
-              {/* Merchant */}
-              <Input
-                label="Merchant"
-                value={form.merchant}
-                onChange={e => setForm(f => ({ ...f, merchant: e.target.value }))}
-                placeholder="e.g. Starbucks"
-              />
 
               {/* Description */}
               <Input
