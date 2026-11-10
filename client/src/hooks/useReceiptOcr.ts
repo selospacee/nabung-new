@@ -9,51 +9,84 @@ export interface OcrResult {
   total: number | null
   date: string | null
   suggestedType: 'income' | 'expense' | 'transfer'
+  suggestedCategoryId: string | null
   rawLines: string[]
 }
 
-export function useReceiptOcr() {
+interface CategoryPattern {
+  id: string
+  name: string
+  merchantPatterns: string[]
+  type: 'income' | 'expense' | 'transfer'
+}
+
+function findCategoryFromPatterns(categories: CategoryPattern[], merchant: string, description: string): string | null {
+  const text = `${merchant} ${description}`.toLowerCase()
+  let bestMatch: CategoryPattern | null = null
+  let bestScore = 0
+
+  for (const cat of categories) {
+    if (cat.type === 'transfer') continue
+    for (const pattern of cat.merchantPatterns) {
+      if (text.includes(pattern.toLowerCase())) {
+        const score = pattern.length
+        if (score > bestScore) {
+          bestScore = score
+          bestMatch = cat
+        }
+      }
+    }
+  }
+
+  return bestMatch?.id || null
+}
+
+export function useReceiptOcr(categories: CategoryPattern[] = []) {
   const [isProcessing, setIsProcessing] = useState(false)
   const [aiParsing, setAiParsing] = useState(false)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
   const recognizeReceipt = useCallback(async (imageSource: string | HTMLImageElement): Promise<OcrResult> => {
-    setIsProcessing(true)
-    setProgress(0)
-    setError(null)
-
-    try {
-      const result = await Tesseract.recognize(imageSource, 'eng', {
-        logger: (m: any) => {
-          if (m.status === 'recognizing text') {
-            setProgress(Math.round((m.progress as number) * 100))
-          }
-        },
-      })
-
-      const rawText = result.data.text
-            const rawLines = rawText.split('\n').filter(l => l.trim().length > 0)
-
-            // Parse merchant, total, date
-            const parsed = parseReceiptText(rawText, rawLines)
-
-            setProgress(100)
-
-            return {
-        text: rawText,
-        confidence: result.data.confidence,
-        ...parsed,
-        rawLines,
-      }
-    } catch (e: any) {
-      setError(e.message || 'OCR failed')
+      setIsProcessing(true)
       setProgress(0)
-      throw e
-    } finally {
-      setIsProcessing(false)
-    }
-  }, [])
+      setError(null)
+
+      try {
+        const result = await Tesseract.recognize(imageSource, 'eng', {
+          logger: (m: any) => {
+            if (m.status === 'recognizing text') {
+              setProgress(Math.round((m.progress as number) * 100))
+            }
+          },
+        })
+
+        const rawText = result.data.text
+        const rawLines = rawText.split('\n').filter(l => l.trim().length > 0)
+
+        // Parse merchant, total, date
+        const parsed = parseReceiptText(rawText, rawLines)
+
+        // Find suggested category based on merchant patterns
+        const suggestedCategoryId = findCategoryFromPatterns(categories, parsed.merchant || '', rawText)
+
+        setProgress(100)
+
+        return {
+          text: rawText,
+          confidence: result.data.confidence,
+          ...parsed,
+          suggestedCategoryId,
+          rawLines,
+        }
+      } catch (e: any) {
+        setError(e.message || 'OCR failed')
+        setProgress(0)
+        throw e
+      } finally {
+        setIsProcessing(false)
+      }
+    }, [categories])
 
   const parseReceiptText = (text: string, lines: string[]): { merchant: string | null; total: number | null; date: string | null; suggestedType: 'income' | 'expense' | 'transfer' } => {
     const lower = text.toLowerCase()

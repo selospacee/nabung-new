@@ -94,7 +94,7 @@ export function AddTransactionModal({
   const [maxZoom, setMaxZoom] = useState(1)
   
   // Receipt OCR state
-  const ocrCtx = useReceiptOcr()
+    const ocrCtx = useReceiptOcr(categories || [])
   const [showReceiptDialog, setShowReceiptDialog] = useState(false)
   const [ocrResult, setOcrResult] = useState<any>(null)
   const [receiptImage, setReceiptImage] = useState<string | null>(null)
@@ -300,53 +300,91 @@ export function AddTransactionModal({
   }, [zoomLevel, hasStream, applyZoom])
   
   // Handle camera capture
-  const handleCameraCapture = useCallback(async () => {
-    if (!cameraRef.current) return
-    const canvas = document.createElement('canvas')
-    canvas.width = cameraRef.current.videoWidth
-    canvas.height = cameraRef.current.videoHeight
-    const ctx = canvas.getContext('2d')!
-    ctx.drawImage(cameraRef.current, 0, 0)
-    const imageData = canvas.toDataURL('image/jpeg', 0.8)
-    setReceiptImage(imageData)
-    setCameraOpen(false)
-    setHasStream(false)
-    if (cameraRef.current.srcObject instanceof MediaStream) {
-      cameraRef.current.srcObject.getTracks().forEach(t => t.stop())
-    }
+    const handleCameraCapture = useCallback(async () => {
+      if (!cameraRef.current) return
+      const canvas = document.createElement('canvas')
+      canvas.width = cameraRef.current.videoWidth
+      canvas.height = cameraRef.current.videoHeight
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(cameraRef.current, 0, 0)
+      const imageData = canvas.toDataURL('image/jpeg', 0.8)
+      setReceiptImage(imageData)
+      setCameraOpen(false)
+      setHasStream(false)
+      if (cameraRef.current.srcObject instanceof MediaStream) {
+        cameraRef.current.srcObject.getTracks().forEach(t => t.stop())
+      }
     
-    const result = await ocrCtx.recognizeReceipt(imageData)
-    setOcrResult(result)
-    setShowReceiptDialog(true)
-  }, [ocrCtx])
+      const result = await ocrCtx.recognizeReceipt(imageData)
+    
+      // Auto-fill form with OCR data and switch to manual tab for editing
+      setForm(f => ({
+        ...f,
+        type: result.suggestedType || 'expense',
+        amount: result.total ? String(result.total / 100) : '',
+        date: result.date || toISODate(new Date()),
+        categoryId: result.suggestedCategoryId || '',
+        description: result.merchant || '',
+        merchant: result.merchant || '',
+        receiptImage: imageData,
+        receiptOcrText: result.text,
+        location: '',
+        latitude: null,
+        longitude: null,
+      }))
+      setActiveTab('manual')
+    
+      // Show notification that form was auto-filled from OCR
+      setOcrResult(result)
+      setShowReceiptDialog(true)
+    }, [ocrCtx, setForm])
   
   // Handle image upload (file input or drag-drop)
-  const handleImageUpload = useCallback(async (file: File) => {
-    const img = new Image()
-    img.src = URL.createObjectURL(file)
-    await new Promise(resolve => { img.onload = resolve })
+    const handleImageUpload = useCallback(async (file: File) => {
+      const img = new Image()
+      img.src = URL.createObjectURL(file)
+      await new Promise(resolve => { img.onload = resolve })
     
-    const canvas = document.createElement('canvas')
-    let width = img.width
-    let height = img.height
-    const maxDim = 1920
-    if (width > maxDim || height > maxDim) {
-      const ratio = maxDim / Math.max(width, height)
-      width *= ratio
-      height *= ratio
-    }
-    canvas.width = width
-    canvas.height = height
-    const ctx = canvas.getContext('2d')!
-    ctx.drawImage(img, 0, 0, width, height)
-    const compressed = canvas.toDataURL('image/jpeg', 0.8)
-    setReceiptImage(compressed)
-    URL.revokeObjectURL(img.src)
+      const canvas = document.createElement('canvas')
+      let width = img.width
+      let height = img.height
+      const maxDim = 1920
+      if (width > maxDim || height > maxDim) {
+        const ratio = maxDim / Math.max(width, height)
+        width *= ratio
+        height *= ratio
+      }
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(img, 0, 0, width, height)
+      const compressed = canvas.toDataURL('image/jpeg', 0.8)
+      setReceiptImage(compressed)
+      URL.revokeObjectURL(img.src)
     
-    const result = await ocrCtx.recognizeReceipt(compressed)
-    setOcrResult(result)
-    setShowReceiptDialog(true)
-  }, [ocrCtx])
+      const result = await ocrCtx.recognizeReceipt(compressed)
+    
+      // Auto-fill form with OCR data and switch to manual tab for editing
+      setForm(f => ({
+        ...f,
+        type: result.suggestedType || 'expense',
+        amount: result.total ? String(result.total / 100) : '',
+        date: result.date || toISODate(new Date()),
+        categoryId: result.suggestedCategoryId || '',
+        description: result.merchant || '',
+        merchant: result.merchant || '',
+        receiptImage: compressed,
+        receiptOcrText: result.text,
+        location: '',
+        latitude: null,
+        longitude: null,
+      }))
+      setActiveTab('manual')
+    
+      // Show notification that form was auto-filled from OCR
+      setOcrResult(result)
+      setShowReceiptDialog(true)
+    }, [ocrCtx, setForm])
   
   // Confirm receipt transaction
   const confirmReceiptTransaction = useCallback(async () => {
@@ -484,13 +522,29 @@ export function AddTransactionModal({
   }, [open, activeTab, hasStream, cameraOpen, openCamera])
   
   // Cleanup camera on close
-  useEffect(() => {
-    return () => {
-      if (cameraRef.current && cameraRef.current.srcObject instanceof MediaStream) {
-        cameraRef.current.srcObject.getTracks().forEach(t => t.stop())
+    useEffect(() => {
+      return () => {
+        if (cameraRef.current && cameraRef.current.srcObject instanceof MediaStream) {
+          cameraRef.current.srcObject.getTracks().forEach(t => t.stop())
+        }
       }
-    }
-  }, [])
+    }, [])
+
+    // Cleanup camera and voice when switching tabs or closing modal
+    useEffect(() => {
+      if (activeTab !== 'camera') {
+        // Stop camera stream when leaving camera tab
+        if (cameraRef.current && cameraRef.current.srcObject instanceof MediaStream) {
+          cameraRef.current.srcObject.getTracks().forEach(t => t.stop())
+        }
+        setHasStream(false)
+        setCameraOpen(false)
+      }
+      if (activeTab !== 'voice') {
+        // Stop voice recognition when leaving voice tab
+        voiceCtx.stopListening()
+      }
+    }, [activeTab, voiceCtx])
   
   if (!open) return null
   
@@ -866,104 +920,79 @@ export function AddTransactionModal({
         
         {/* Receipt OCR Dialog */}
         <Dialog open={showReceiptDialog} onClose={() => { setShowReceiptDialog(false); setOcrResult(null) }}>
-          <div className="p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Receipt Capture</h3>
-              <Button variant="ghost" size="icon" onClick={() => { setShowReceiptDialog(false); setOcrResult(null) }}>
-                <X className="w-5 h-5" />
-              </Button>
-            </div>
-            
-            {receiptImage && (
-              <div className="mb-4">
-                <img
-                  src={receiptImage}
-                  alt="Receipt"
-                  className="h-48 w-auto rounded-lg object-cover border border-border max-w-full"
-                />
-              </div>
-            )}
-            
-            {ocrResult && (
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  {ocrResult.merchant && (
-                    <div className="p-3 rounded-lg border border-border bg-card">
-                      <span className="text-xs text-muted-foreground">Merchant</span>
-                      <p className="font-medium text-sm mt-0.5">{ocrResult.merchant}</p>
+                  <div className="p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold">Receipt Capture</h3>
+                      <Button variant="ghost" size="icon" onClick={() => { setShowReceiptDialog(false); setOcrResult(null) }}>
+                        <X className="w-5 h-5" />
+                      </Button>
                     </div>
-                  )}
-                  {ocrResult.total && (
-                    <div className="p-3 rounded-lg border border-border bg-card">
-                      <span className="text-xs text-muted-foreground">Total</span>
-                      <p className="font-mono font-semibold text-income text-sm mt-0.5">
-                        {formatCurrency(ocrResult.total, currency)}
-                      </p>
-                    </div>
-                  )}
-                  {ocrResult.date && (
-                    <div className="p-3 rounded-lg border border-border bg-card">
-                      <span className="text-xs text-muted-foreground">Date</span>
-                      <p className="font-mono text-sm mt-0.5">{ocrResult.date}</p>
-                    </div>
-                  )}
-                </div>
-                
-                {ocrResult.rawLines.length > 0 && (
-                                  <details className="group">
-                                    <summary className="text-sm text-muted-foreground cursor-pointer hover:text-foreground py-1 flex items-center gap-1">
-                                      <ChevronDown className="w-3 h-3 group-open:rotate-180 transition-transform" />
-                                      Raw OCR text ({ocrResult.rawLines.length} lines)
-                                    </summary>
-                                    <div className="mt-2 p-3 rounded-lg bg-secondary text-xs font-mono whitespace-pre-wrap max-h-40 overflow-y-auto">
-                                      {ocrResult.rawLines.join('\n')}
-                                    </div>
-                                  </details>
-                                )}
-                              </div>
-                            )}
-            
-                            <div className="flex gap-3 pt-4">
-                              <Button
-                                variant="default"
-                                size="sm"
-                                disabled={!ocrResult?.total}
-                                onClick={confirmReceiptTransaction}
-                              >
-                                Save Transaction
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  // Fill manual form with OCR data
-                                  setForm(f => ({
-                                    ...f,
-                                    type: ocrResult.suggestedType || 'expense',
-                                    amount: ocrResult.total ? String(ocrResult.total / 100) : '',
-                                    date: ocrResult.date || toISODate(new Date()),
-                                    categoryId: ocrResult.suggestedCategoryId || '',
-                                    description: ocrResult.merchant || '',
-                                    merchant: ocrResult.merchant || '',
-                                    receiptImage: receiptImage,
-                                    receiptOcrText: ocrResult.text,
-                                    location: '',
-                                    latitude: null,
-                                    longitude: null,
-                                  }))
-                                  setActiveTab('manual')
-                                  setShowReceiptDialog(false)
-                                }}
-                              >
-                                Fill & Edit Transaction
-                              </Button>
-                              <Button variant="ghost" size="sm" onClick={() => { setShowReceiptDialog(false); setOcrResult(null) }}>
-                                Cancel
-                              </Button>
+
+                    {receiptImage && (
+                      <div className="mb-4">
+                        <img
+                          src={receiptImage}
+                          alt="Receipt"
+                          className="h-48 w-auto rounded-lg object-cover border border-border max-w-full"
+                        />
+                      </div>
+                    )}
+
+                    {ocrResult && (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          {ocrResult.merchant && (
+                            <div className="p-3 rounded-lg border border-border bg-card">
+                              <span className="text-xs text-muted-foreground">Merchant</span>
+                              <p className="font-medium text-sm mt-0.5">{ocrResult.merchant}</p>
                             </div>
+                          )}
+                          {ocrResult.total && (
+                            <div className="p-3 rounded-lg border border-border bg-card">
+                              <span className="text-xs text-muted-foreground">Total</span>
+                              <p className="font-mono font-semibold text-income text-sm mt-0.5">
+                                {formatCurrency(ocrResult.total, currency)}
+                              </p>
+                            </div>
+                          )}
+                          {ocrResult.date && (
+                            <div className="p-3 rounded-lg border border-border bg-card">
+                              <span className="text-xs text-muted-foreground">Date</span>
+                              <p className="font-mono text-sm mt-0.5">{ocrResult.date}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {ocrResult.rawLines.length > 0 && (
+                          <details className="group">
+                            <summary className="text-sm text-muted-foreground cursor-pointer hover:text-foreground py-1 flex items-center gap-1">
+                              <ChevronDown className="w-3 h-3 group-open:rotate-180 transition-transform" />
+                              Raw OCR text ({ocrResult.rawLines.length} lines)
+                            </summary>
+                            <div className="mt-2 p-3 rounded-lg bg-secondary text-xs font-mono whitespace-pre-wrap max-h-40 overflow-y-auto">
+                              {ocrResult.rawLines.join('\n')}
+                            </div>
+                          </details>
+                        )}
+                      </div>
+                                          )}
+
+                                          <div className="flex gap-3 pt-4">
+                                            <Button
+                                              variant="default"
+                                              size="sm"
+                                              disabled={!ocrResult?.total}
+                                              onClick={confirmReceiptTransaction}
+                                            >
+                                              Save Transaction
+                                            </Button>
+                                            <Button variant="ghost" size="sm" onClick={() => { setShowReceiptDialog(false); setOcrResult(null) }}>
+                                              Clear OCR
+                                            </Button>
           </div>
-        </Dialog>
-      </div>
-    </Dialog>
-  )
+        </div>
+      </Dialog>
+    </div>
+  </Dialog>
+)
 }
