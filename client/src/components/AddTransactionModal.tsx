@@ -528,9 +528,10 @@ export function AddTransactionModal({
   
   // Auto-open camera when modal opens on camera tab
     useEffect(() => {
-      // Don't auto-open camera - wait for user to click "Open Camera" button
-      // This respects privacy - camera only starts on explicit user action
-    }, [])
+      if (open && activeTab === 'camera' && !hasStream && !cameraOpen) {
+        openCamera()
+      }
+    }, [open, activeTab, hasStream, cameraOpen, openCamera])
   
   // Cleanup camera on close
     useEffect(() => {
@@ -539,7 +540,7 @@ export function AddTransactionModal({
           cameraRef.current.srcObject.getTracks().forEach(t => t.stop())
         }
       }
-    }, [])
+    }, [open])
 
     // Cleanup camera and voice when switching tabs or closing modal
     useEffect(() => {
