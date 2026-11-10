@@ -440,15 +440,22 @@ export function AddTransactionModal({
       return
     }
     setSaving(true)
-    await addTransaction({
-      ...form,
-      type: form.type,
-      amount: displayToCents(form.amount, currency),
-      date: form.date,
-    } as any)
-    setSaving(false)
-    resetForm()
-    onClose()
+        await addTransaction({
+          ...form,
+          type: form.type,
+          amount: displayToCents(form.amount, currency),
+          date: form.date,
+        } as any)
+        const pushResult = await pushLocalChangesToSupabase(userId || '')
+        if (!pushResult.success) {
+          console.error('[Modal] Push to Supabase failed:', pushResult.errors)
+          alert('Gagal menyimpan ke Supabase: ' + pushResult.errors.map(e => e.message).join(', '))
+          setSaving(false)
+          return
+        }
+        setSaving(false)
+        resetForm()
+        onClose()
   }, [form, currency, addTransaction])
   
   const resetForm = useCallback(() => {
