@@ -738,30 +738,10 @@ export function AddTransactionModal({
                   onClick={() => getCurrentLocationFromAddress(form.location)}
                 >
                   {geocoding ? 'Searching...' : 'Search Location'}
-                </Button>
-              </div>
-
-              {/* Latitude & Longitude */}
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  label="Latitude"
-                  type="number"
-                  step="any"
-                  value={form.latitude?.toString() || ''}
-                  onChange={e => setForm(f => ({ ...f, latitude: e.target.value ? parseFloat(e.target.value) : null }))}
-                  placeholder="Auto-filled"
-                />
-                <Input
-                  label="Longitude"
-                  type="number"
-                  step="any"
-                  value={form.longitude?.toString() || ''}
-                  onChange={e => setForm(f => ({ ...f, longitude: e.target.value ? parseFloat(e.target.value) : null }))}
-                  placeholder="Auto-filled"
-                />
-              </div>
+                                  </Button>
+                                </div>
               
-              <Textarea
+                                <Textarea
                 label="Notes (optional)"
                 placeholder="Additional notes..."
                 value={form.notes}
