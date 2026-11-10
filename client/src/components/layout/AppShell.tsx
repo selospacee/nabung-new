@@ -31,6 +31,7 @@ import { Button } from '../../components/ui'
 import { useState } from 'react'
 import { useCurrentUser } from '../../db/hooks'
 import { AddTransactionModal } from '../AddTransactionModal'
+import { useAutoSync } from '../../hooks/useAutoSync'
 import { useAccounts, useCategories, useDefaultAccount, useTransactions, useAccountBalances } from '../../db/hooks'
 
 const NAV_ITEMS = [
@@ -51,6 +52,9 @@ const MOBILE_NAV_ITEMS = [
 export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation()
   const { user, userId } = useCurrentUser()
+  
+  // Auto-sync: periodic + realtime + focus
+  useAutoSync(true)
   const accounts = useAccounts(userId)
   const categories = useCategories(userId)
   const defaultAccount = useDefaultAccount()
