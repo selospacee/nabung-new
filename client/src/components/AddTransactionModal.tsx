@@ -366,7 +366,18 @@ export function AddTransactionModal({
   // Handle form submit
   const handleFormSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.amount || !form.categoryId || !form.accountId) return
+    if (!form.amount) {
+      alert('Amount is required')
+      return
+    }
+    if (!form.categoryId) {
+      alert('Category is required')
+      return
+    }
+    if (!form.accountId) {
+      alert('Account is required')
+      return
+    }
     setSaving(true)
     await addTransaction({
       ...form,
