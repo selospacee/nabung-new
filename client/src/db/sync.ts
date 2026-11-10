@@ -32,6 +32,14 @@ export async function syncUserDataFromSupabase(userId: string): Promise<void> {
   validateUserId(userId)
   console.log('[Sync] Starting sync for user:', userId)
 
+  // Critical: verify the session user matches the userId we're syncing for
+  const { data: { session } } = await supabase.auth.getSession()
+  if (session?.user?.id !== userId) {
+    const msg = `Auth mismatch: session user (${session?.user?.id || 'none'}) !== sync userId (${userId})`
+    console.error('[Sync]', msg)
+    throw new Error(msg)
+  }
+
   try {
     // 1. Sync Profile (User)
     const { data: profile, error: profileError } = await supabase
