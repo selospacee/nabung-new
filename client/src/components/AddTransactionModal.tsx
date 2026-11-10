@@ -693,20 +693,44 @@ export function AddTransactionModal({
                 
                 <div className="flex gap-3 pt-2">
                   <Button variant="outline" size="sm" onClick={() => voiceCtx.startListening()}>
-                    <Mic className="w-4 h-4 mr-1" /> Listen
-                  </Button>
-                  <Button
-                    size="sm"
-                    disabled={!voiceCtx.parsed.amount || !voiceCtx.parsed.date}
-                    onClick={confirmVoiceTransaction}
-                  >
-                    Save Transaction
-                  </Button>
-                  {voiceCtx.parsed.amount && (
-                    <Button variant="ghost" size="sm" onClick={() => voiceCtx.clearTranscript()}>
-                      Clear
-                    </Button>
-                  )}
+                                      <Mic className="w-4 h-4 mr-1" /> Listen
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      disabled={!voiceCtx.parsed.amount || !voiceCtx.parsed.date}
+                                      onClick={confirmVoiceTransaction}
+                                    >
+                                      Save Transaction
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        // Fill manual form with voice data
+                                        setForm(f => ({
+                                          ...f,
+                                          type: voiceCtx.parsed.suggestedType || 'expense',
+                                          amount: voiceCtx.parsed.amount ? String(voiceCtx.parsed.amount / 100) : '',
+                                          date: voiceCtx.parsed.date || toISODate(new Date()),
+                                          categoryId: voiceCtx.parsed.suggestedCategoryId || '',
+                                          description: voiceCtx.parsed.description || voiceCtx.parsed.merchant || '',
+                                          merchant: voiceCtx.parsed.merchant || '',
+                                          receiptImage: null,
+                                          receiptOcrText: null,
+                                          location: '',
+                                          latitude: null,
+                                          longitude: null,
+                                        }))
+                                        setActiveTab('manual')
+                                      }}
+                                    >
+                                      Fill & Edit Transaction
+                                    </Button>
+                                    {voiceCtx.parsed.amount && (
+                                      <Button variant="ghost" size="sm" onClick={() => voiceCtx.clearTranscript()}>
+                                        Clear
+                                      </Button>
+                                    )}
                 </div>
               </div>
             )}
@@ -879,32 +903,57 @@ export function AddTransactionModal({
                 </div>
                 
                 {ocrResult.rawLines.length > 0 && (
-                  <details className="group">
-                    <summary className="text-sm text-muted-foreground cursor-pointer hover:text-foreground py-1 flex items-center gap-1">
-                      <ChevronDown className="w-3 h-3 group-open:rotate-180 transition-transform" />
-                      Raw OCR text ({ocrResult.rawLines.length} lines)
-                    </summary>
-                    <div className="mt-2 p-3 rounded-lg bg-secondary text-xs font-mono whitespace-pre-wrap max-h-40 overflow-y-auto">
-                      {ocrResult.rawLines.join('\n')}
-                    </div>
-                  </details>
-                )}
-              </div>
-            )}
+                                  <details className="group">
+                                    <summary className="text-sm text-muted-foreground cursor-pointer hover:text-foreground py-1 flex items-center gap-1">
+                                      <ChevronDown className="w-3 h-3 group-open:rotate-180 transition-transform" />
+                                      Raw OCR text ({ocrResult.rawLines.length} lines)
+                                    </summary>
+                                    <div className="mt-2 p-3 rounded-lg bg-secondary text-xs font-mono whitespace-pre-wrap max-h-40 overflow-y-auto">
+                                      {ocrResult.rawLines.join('\n')}
+                                    </div>
+                                  </details>
+                                )}
+                              </div>
+                            )}
             
-            <div className="flex gap-3 pt-4">
-              <Button
-                variant="default"
-                size="sm"
-                disabled={!ocrResult?.total}
-                onClick={confirmReceiptTransaction}
-              >
-                Save Transaction
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => { setShowReceiptDialog(false); setOcrResult(null) }}>
-                Cancel
-              </Button>
-            </div>
+                            <div className="flex gap-3 pt-4">
+                              <Button
+                                variant="default"
+                                size="sm"
+                                disabled={!ocrResult?.total}
+                                onClick={confirmReceiptTransaction}
+                              >
+                                Save Transaction
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  // Fill manual form with OCR data
+                                  setForm(f => ({
+                                    ...f,
+                                    type: ocrResult.suggestedType || 'expense',
+                                    amount: ocrResult.total ? String(ocrResult.total / 100) : '',
+                                    date: ocrResult.date || toISODate(new Date()),
+                                    categoryId: ocrResult.suggestedCategoryId || '',
+                                    description: ocrResult.merchant || '',
+                                    merchant: ocrResult.merchant || '',
+                                    receiptImage: receiptImage,
+                                    receiptOcrText: ocrResult.text,
+                                    location: '',
+                                    latitude: null,
+                                    longitude: null,
+                                  }))
+                                  setActiveTab('manual')
+                                  setShowReceiptDialog(false)
+                                }}
+                              >
+                                Fill & Edit Transaction
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => { setShowReceiptDialog(false); setOcrResult(null) }}>
+                                Cancel
+                              </Button>
+                            </div>
           </div>
         </Dialog>
       </div>
