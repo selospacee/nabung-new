@@ -76,6 +76,8 @@ export function TransactionsPage() {
   const [showFilters, setShowFilters] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [voiceSaving, setVoiceSaving] = useState(false)
+  const [receiptSaving, setReceiptSaving] = useState(false)
 
   // Voice entry
     const voiceCtx = useSpeechToText(categories || [])
@@ -412,27 +414,31 @@ export function TransactionsPage() {
 
   const confirmVoiceTransaction = async () => {
                 if (!voiceCtx.parsed.amount || !voiceCtx.parsed.date) return
+                setVoiceSaving(true)
+                try {
+                  await addTransaction({
+                    type: voiceCtx.parsed.suggestedType || 'expense',
+                    amount: voiceCtx.parsed.amount,
+                    date: voiceCtx.parsed.date,
+                    categoryId: voiceCtx.parsed.suggestedCategoryId || null,
+                    accountId: defaultAccount?.id || (accounts?.[0]?.id || ''),
+                    description: voiceCtx.parsed.description,
+                    merchant: voiceCtx.parsed.merchant,
+                    notes: '',
+                    receiptImage: null,
+                    receiptOcrText: null,
+                    location: voiceCtx.parsed.location || '',
+                    latitude: voiceCtx.parsed.latitude ?? null,
+                    longitude: voiceCtx.parsed.longitude ?? null,
+                  })
+                  // addTransaction already pushes to Supabase
 
-                await addTransaction({
-                  type: voiceCtx.parsed.suggestedType || 'expense',
-                  amount: voiceCtx.parsed.amount,
-                  date: voiceCtx.parsed.date,
-                  categoryId: voiceCtx.parsed.suggestedCategoryId || null,
-                  accountId: defaultAccount?.id || (accounts?.[0]?.id || ''),
-                  description: voiceCtx.parsed.description,
-                  merchant: voiceCtx.parsed.merchant,
-                  notes: '',
-                  receiptImage: null,
-                  receiptOcrText: null,
-                  location: voiceCtx.parsed.location || '',
-                  latitude: voiceCtx.parsed.latitude ?? null,
-                  longitude: voiceCtx.parsed.longitude ?? null,
-                })
-                // addTransaction already pushes to Supabase
-
-                setShowVoiceDialog(false)
-                voiceCtx.clearTranscript()
-                setFormOpen(false) // Also close main form if open
+                  setShowVoiceDialog(false)
+                  voiceCtx.clearTranscript()
+                  setFormOpen(false) // Also close main form if open
+                } finally {
+                  setVoiceSaving(false)
+                }
               }
 
   // Receipt OCR handler
@@ -484,28 +490,32 @@ export function TransactionsPage() {
 
   const confirmReceiptTransaction = async () => {
                 if (!ocrResult?.total || !ocrResult?.date) return
+                setReceiptSaving(true)
+                try {
+                  await addTransaction({
+                    type: ocrResult.suggestedType || 'expense',
+                    amount: ocrResult.total,
+                    date: ocrResult.date,
+                    categoryId: ocrResult.suggestedCategoryId || null,
+                    accountId: defaultAccount?.id || (accounts?.[0]?.id || ''),
+                    description: ocrResult.merchant || '',
+                    merchant: ocrResult.merchant || '',
+                    notes: '',
+                    receiptImage: receiptImage,
+                    receiptOcrText: ocrResult.text,
+                    location: '',
+                    latitude: null,
+                    longitude: null,
+                  })
+                  // addTransaction already pushes to Supabase
 
-                await addTransaction({
-                  type: ocrResult.suggestedType || 'expense',
-                  amount: ocrResult.total,
-                  date: ocrResult.date,
-                  categoryId: ocrResult.suggestedCategoryId || null,
-                  accountId: defaultAccount?.id || (accounts?.[0]?.id || ''),
-                  description: ocrResult.merchant || '',
-                  merchant: ocrResult.merchant || '',
-                  notes: '',
-                  receiptImage: receiptImage,
-                  receiptOcrText: ocrResult.text,
-                  location: '',
-                  latitude: null,
-                  longitude: null,
-                })
-                // addTransaction already pushes to Supabase
-
-                setShowReceiptDialog(false)
-                setReceiptImage(null)
-                setOcrResult(null)
-                setFormOpen(false) // Also close main form if open
+                  setShowReceiptDialog(false)
+                  setReceiptImage(null)
+                  setOcrResult(null)
+                  setFormOpen(false) // Also close main form if open
+                } finally {
+                  setReceiptSaving(false)
+                }
               }
 
   if (!transactions) {
@@ -1005,10 +1015,10 @@ export function TransactionsPage() {
                 </Button>
                 <Button
                   size="sm"
-                  disabled={!voiceCtx.parsed.amount || !voiceCtx.parsed.date}
+                  disabled={!voiceCtx.parsed.amount || !voiceCtx.parsed.date || voiceSaving}
                   onClick={confirmVoiceTransaction}
                 >
-                  Save Transaction
+                  {voiceSaving ? 'Saving...' : 'Save Transaction'}
                 </Button>
                 {voiceCtx.parsed.amount && (
                   <Button variant="ghost" size="sm" onClick={() => voiceCtx.clearTranscript()}>
@@ -1134,15 +1144,26 @@ export function TransactionsPage() {
                                 <Button
                                   variant="default"
                                   size="sm"
-                                  disabled={!ocrResult?.total}
+                                  disabled={!ocrResult?.total || receiptSaving}
                                   onClick={confirmReceiptTransaction}
                                 >
-                                  Save Transaction
+                                  {receiptSaving ? 'Saving...' : 'Save Transaction'}
                                 </Button>
-            <Button variant="ghost" size="sm" onClick={() => { setShowReceiptDialog(false); setOcrResult(null) }}>
-              Cancel
-            </Button>
-          </div>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setShowReceiptDialog(false)
+                                    // Form is already open, user can edit there
+                                    setFormOpen(true)
+                                  }}
+                                >
+                                  Edit in Form
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => { setShowReceiptDialog(false); setOcrResult(null) }}>
+                                  Cancel
+                                </Button>
+                              </div>
         </div>
       </Dialog>
 
