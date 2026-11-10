@@ -364,7 +364,7 @@ export function AddTransactionModal({
           
           {/* Camera Tab */}
           <TabsContent value="camera" className="mt-4 space-y-4">
-            <div className="relative rounded-lg overflow-hidden border border-border bg-black aspect-[9/16]">
+            <div className="relative rounded-lg overflow-hidden border border-border bg-black aspect-[3/4] max-h-[55vh]">
               <video ref={cameraRef} autoPlay playsInline muted className="w-full h-full object-cover" />
               {hasStream ? (
                 <>
