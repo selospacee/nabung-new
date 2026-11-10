@@ -365,7 +365,7 @@ export function TabsTrigger({ value, children, className }: TabsTriggerProps) {
     <button
       onClick={() => setValue(value)}
       className={cn(
-        'px-4 py-2 text-sm font-medium border-b-2 -mb-0 transition-colors',
+        'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-0 transition-colors',
         activeValue === value
           ? 'border-primary text-primary'
           : 'border-transparent text-muted-foreground hover:text-foreground',

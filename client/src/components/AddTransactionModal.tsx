@@ -8,7 +8,7 @@ import { formatDate, toISODate } from '../utils/dates'
 import { DATE_PRESETS } from '../utils/dates'
 import {
   Plus, Search, Filter, X, Edit3, Trash2, Receipt, Mic, Wallet, Briefcase, Laptop,
-  ChevronDown, ChevronUp, DollarSign, CreditCard, Banknote, PiggyBank,
+  ChevronDown, ChevronUp, CreditCard, Banknote, PiggyBank,
   TrendingUp, TrendingDown, ArrowRightLeft, MoreHorizontal, Building2,
   Car, ShoppingBag, Utensils, FileText, Heart, Film, GraduationCap, Package, Camera, MapPin, RefreshCw, Loader2, User, Users, Calendar, RotateCcw
 } from 'lucide-react'
@@ -30,6 +30,31 @@ const ACCOUNT_COLORS: Record<string, string> = {
 const CATEGORY_ICONS: Record<string, any> = {
   Briefcase, Laptop, Utensils, Car, ShoppingBag, FileText, Heart,
   Film, GraduationCap, MoreHorizontal, ArrowRightLeft, Building2, Package
+}
+
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  IDR: 'Rp',
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  JPY: '¥',
+  SGD: 'S$',
+  MYR: 'RM',
+  THB: '฿',
+  VND: '₫',
+  PHP: '₱',
+  KRW: '₩',
+  CNY: '¥',
+  TWD: 'NT$',
+  HKD: 'HK$',
+  AUD: 'A$',
+  CAD: 'C$',
+  CHF: 'CHF',
+  NZD: 'NZ$',
+}
+
+function getCurrencySymbol(currency: string): string {
+  return CURRENCY_SYMBOLS[currency] || currency
 }
 
 interface AddTransactionModalProps {
@@ -586,7 +611,9 @@ export function AddTransactionModal({
               
               <div className="grid grid-cols-2 gap-3">
                 <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">
+                    {getCurrencySymbol(currency)}
+                  </span>
                   <Input
                     type="text"
                     placeholder="Amount"

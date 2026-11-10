@@ -119,46 +119,44 @@ export function AppShell({ children }: { children: ReactNode }) {
       </aside>
 
       {/* Mobile bottom navigation */}
-                        <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden border-t border-border bg-card/95 backdrop-blur-sm">
-                          <div className="flex items-center justify-between px-2 py-1.5 w-full">
-                            <div className="flex items-center justify-around w-full">
-                              {MOBILE_NAV_ITEMS.map((item, index) => {
-                                                              const Icon = item.icon
-                                                              const isActive = item.end
-                                                                ? location.pathname === item.to
-                                                                : location.pathname.startsWith(item.to)
+                              <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden border-t border-border bg-card/95 backdrop-blur-sm">
+                                <div className="flex items-center justify-between px-2 py-1.5 w-full">
+                                  <div className="flex items-center justify-around w-full">
+                                    {MOBILE_NAV_ITEMS.map((item, index) => {
+                                      const Icon = item.icon
+                                      const isActive = item.end
+                                        ? location.pathname === item.to
+                                        : location.pathname.startsWith(item.to)
 
-                                                              return (
-                                                                <div key={item.to} className="flex flex-col items-center flex-1">
-                                                                  <NavLink
-                                                                    to={item.to}
-                                                                    end={item.end}
-                                                                    className={cn(
-                                                                      'flex flex-col items-center gap-1 px-2 py-2 rounded-lg text-xs font-medium transition-colors',
-                                                                      isActive
-                                                                        ? 'text-primary'
-                                                                        : 'text-muted-foreground'
-                                                                    )}
-                                                                  >
-                                                                    <Icon className="w-5 h-5" />
-                                                                    {item.label}
-                                                                  </NavLink>
-                                                                  {/* Center Add Transaction button - 3rd position */}
-                                                                  {index === 1 && (
-                                                                    <Button
-                                                                      onClick={() => setShowAddModal(true)}
-                                                                      className="rounded-full bg-primary text-primary-foreground shadow-lg mt-1"
-                                                                      size="icon"
-                                                                    >
-                                                                      <Plus className="w-7 h-7" />
-                                                                    </Button>
-                                                                  )}
-                                                                </div>
-                                                              )
-                                                            })}
-                            </div>
-                          </div>
-                        </nav>
+                                      return (
+                                        <NavLink
+                                          key={item.to}
+                                          to={item.to}
+                                          end={item.end}
+                                          className={cn(
+                                            'flex flex-col items-center gap-1 px-2 py-2 rounded-lg text-xs font-medium transition-colors',
+                                            isActive
+                                              ? 'text-primary'
+                                              : 'text-muted-foreground'
+                                          )}
+                                        >
+                                          <Icon className="w-5 h-5" />
+                                          {item.label}
+                                        </NavLink>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              </nav>
+
+                              {/* Floating Add Transaction button */}
+                              <Button
+                                onClick={() => setShowAddModal(true)}
+                                className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 lg:hidden rounded-full bg-primary text-primary-foreground shadow-lg"
+                                size="icon"
+                              >
+                                <Plus className="w-7 h-7" />
+                              </Button>
 
                               {/* Main content */}
             <main className="flex-1 p-4 lg:p-6 max-w-7xl w-full pb-20 lg:pb-0">
