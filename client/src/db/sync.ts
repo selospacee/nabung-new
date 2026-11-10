@@ -32,10 +32,14 @@ export async function syncUserDataFromSupabase(userId: string): Promise<void> {
   validateUserId(userId)
   console.log('[Sync] Starting sync for user:', userId)
 
-  // Critical: verify the session user matches the userId we're syncing for
+  // Get session - if not ready, don't throw, just return (will retry on auth state change)
   const { data: { session } } = await supabase.auth.getSession()
-  if (session?.user?.id !== userId) {
-    const msg = `Auth mismatch: session user (${session?.user?.id || 'none'}) !== sync userId (${userId})`
+  if (!session?.user) {
+    console.log('[Sync] No session yet, will retry on auth state change')
+    return
+  }
+  if (session.user.id !== userId) {
+    const msg = `Auth mismatch: session user (${session.user.id}) !== sync userId (${userId})`
     console.error('[Sync]', msg)
     throw new Error(msg)
   }
@@ -183,13 +187,16 @@ export async function pushLocalChangesToSupabase(userId: string): Promise<PushRe
   validateUserId(userId)
   console.log('[Sync] Pushing local changes for user:', userId)
   
-  // Debug: check auth state
+  // Get session - if not ready, return error (will retry on auth state change)
   const { data: { session } } = await supabase.auth.getSession()
   console.log('[Sync] Supabase session:', session?.user?.id || 'none')
   
-  // Critical: verify the session user matches the userId we're pushing for
-  if (session?.user?.id !== userId) {
-    const msg = `Auth mismatch: session user (${session?.user?.id || 'none'}) !== push userId (${userId})`
+  if (!session?.user) {
+    console.log('[Sync] No session yet, will retry on auth state change')
+    return { success: false, errors: [{ table: 'auth', message: 'No session available' }] }
+  }
+  if (session.user.id !== userId) {
+    const msg = `Auth mismatch: session user (${session.user.id}) !== push userId (${userId})`
     console.error('[Sync]', msg)
     return { success: false, errors: [{ table: 'auth', message: msg }] }
   }
