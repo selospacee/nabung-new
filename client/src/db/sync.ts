@@ -179,6 +179,13 @@ export async function pushLocalChangesToSupabase(userId: string): Promise<PushRe
   const { data: { session } } = await supabase.auth.getSession()
   console.log('[Sync] Supabase session:', session?.user?.id || 'none')
   
+  // Critical: verify the session user matches the userId we're pushing for
+  if (session?.user?.id !== userId) {
+    const msg = `Auth mismatch: session user (${session?.user?.id || 'none'}) !== push userId (${userId})`
+    console.error('[Sync]', msg)
+    return { success: false, errors: [{ table: 'auth', message: msg }] }
+  }
+  
   const errors: Array<{ table: string; message: string }> = []
 
   try {
@@ -189,7 +196,7 @@ export async function pushLocalChangesToSupabase(userId: string): Promise<PushRe
       snakeAccount.user_id = userId
       delete snakeAccount.balance
       const cleanPayload = stripToAllowedKeys(snakeAccount, 'accounts')
-      const { error } = await supabase.from('accounts').upsert(cleanPayload)
+      const { error } = await supabase.from('accounts').upsert(cleanPayload, { onConflict: 'id' })
       if (error) {
         const msg = formatSupabaseError(error)
         console.error('[Sync] Push account error:', msg)
@@ -203,7 +210,7 @@ export async function pushLocalChangesToSupabase(userId: string): Promise<PushRe
       const snakeCategory = toSnakeCase(category as unknown as Record<string, unknown>)
       snakeCategory.user_id = userId
       const cleanPayload = stripToAllowedKeys(snakeCategory, 'categories')
-      const { error } = await supabase.from('categories').upsert(cleanPayload)
+      const { error } = await supabase.from('categories').upsert(cleanPayload, { onConflict: 'id' })
       if (error) {
         const msg = formatSupabaseError(error)
         console.error('[Sync] Push category error:', msg)
@@ -219,7 +226,7 @@ export async function pushLocalChangesToSupabase(userId: string): Promise<PushRe
       snakeTransaction.user_id = userId
       const cleanPayload = stripToAllowedKeys(snakeTransaction, 'transactions')
       console.log('[Sync] Upserting transaction:', cleanPayload)
-      const { error } = await supabase.from('transactions').upsert(cleanPayload)
+      const { error } = await supabase.from('transactions').upsert(cleanPayload, { onConflict: 'id' })
       if (error) {
         const msg = formatSupabaseError(error)
         console.error('[Sync] Push transaction error:', msg)
@@ -233,7 +240,7 @@ export async function pushLocalChangesToSupabase(userId: string): Promise<PushRe
       const snakeBudget = toSnakeCase(budget as unknown as Record<string, unknown>)
       snakeBudget.user_id = userId
       const cleanPayload = stripToAllowedKeys(snakeBudget, 'budgets')
-      const { error } = await supabase.from('budgets').upsert(cleanPayload)
+      const { error } = await supabase.from('budgets').upsert(cleanPayload, { onConflict: 'id' })
       if (error) {
         const msg = formatSupabaseError(error)
         console.error('[Sync] Push budget error:', msg)
@@ -247,7 +254,7 @@ export async function pushLocalChangesToSupabase(userId: string): Promise<PushRe
       const snakeGoal = toSnakeCase(goal as unknown as Record<string, unknown>)
       snakeGoal.user_id = userId
       const cleanPayload = stripToAllowedKeys(snakeGoal, 'savings_goals')
-      const { error } = await supabase.from('savings_goals').upsert(cleanPayload)
+      const { error } = await supabase.from('savings_goals').upsert(cleanPayload, { onConflict: 'id' })
       if (error) {
         const msg = formatSupabaseError(error)
         console.error('[Sync] Push goal error:', msg)
@@ -261,7 +268,7 @@ export async function pushLocalChangesToSupabase(userId: string): Promise<PushRe
       const snakeCashier = toSnakeCase(cashier as unknown as Record<string, unknown>)
       snakeCashier.user_id = userId
       const cleanPayload = stripToAllowedKeys(snakeCashier, 'cashiers')
-      const { error } = await supabase.from('cashiers').upsert(cleanPayload)
+      const { error } = await supabase.from('cashiers').upsert(cleanPayload, { onConflict: 'id' })
       if (error) {
         const msg = formatSupabaseError(error)
         console.error('[Sync] Push cashier error:', msg)
