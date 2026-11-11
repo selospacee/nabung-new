@@ -1,6 +1,6 @@
 # Nabung Bareng — Skema, RLS & RPC (kontrak Fase 0)
 
-> **Status: BELUM DIAPPLY** ke project Supabase `lyhemujxjphuyohyckvw`. Migration menunggu persetujuan eksplisit.
+> **Status: SUDAH DIAPPLY** ke project Supabase `lyhemujxjphuyohyckvw` (Nabung) pada 2026-11-11, dengan dua migration: `shared_savings` dan `shared_savings_revoke_trigger_execute` (cabut EXECUTE trigger dari anon/authenticated, hasil temuan advisor).
 
 File terkait:
 

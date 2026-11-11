@@ -137,9 +137,8 @@ export const LIVE_SCHEMA: LiveSchema = {
       },
       checks: { role: ['cashier', 'admin', 'manager'] },
     },
-    // PENDING APPLY: tabel Nabung Bareng di bawah ini BELUM ada di DB live.
-    // Sumber: supabase/migrations/20261111105700_shared_savings.sql. Hapus komentar ini dan
-    // regenerasi snapshot (docs/testing.md) setelah migration diapply.
+    // Tabel Nabung Bareng: sudah diapply ke project Nabung (2026-11-11). Struktur dicek ulang
+    // terhadap information_schema live; sumber: supabase/migrations/20261111105700_shared_savings.sql.
     groups: {
       columns: {
         id: { notNull: true, hasDefault: true },
