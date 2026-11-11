@@ -18,6 +18,7 @@ import type { Transaction as TxType, Category } from '../types'
 import { db } from '../db'
 import { pushLocalChangesToSupabase } from '../db/sync'
 import { pushAndReport } from '../db/pushAndReport'
+import { pickCategoryId } from '../utils/pickCategory'
 import { useCameraStream } from '../hooks/useCameraStream'
 import React from 'react'
 
