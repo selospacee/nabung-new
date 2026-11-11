@@ -181,6 +181,10 @@ export function TransactionsPage() {
               }
             }, [])
 
+                            const cam = useCameraStream()
+                                                    const cameraRef = cam.videoRef
+                                                    const hasStream = cam.active
+                                                    const closeCamera = () => { setCameraOpen(false); cam.stop() }
               // Open camera directly when Receipt button clicked
                             const openCameraDirect = useCallback(async () => {
                                 setCameraOpen(true)
@@ -193,10 +197,6 @@ export function TransactionsPage() {
   const [ocrResult, setOcrResult] = useState<any>(null)
   const [receiptImage, setReceiptImage] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-    const cam = useCameraStream()
-    const cameraRef = cam.videoRef
-    const hasStream = cam.active
-    const closeCamera = () => { setCameraOpen(false); cam.stop() }
     const [cameraOpen, setCameraOpen] = useState(false)
 
   const currency = user?.currency || 'IDR'
