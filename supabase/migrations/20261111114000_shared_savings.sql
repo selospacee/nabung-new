@@ -1,8 +1,8 @@
 -- Nabung Bareng (shared savings): tabel, RLS, RPC, view progres, dan log aktivitas.
 -- Kontrak lengkap: docs/shared-savings-schema.md
 --
--- STATUS: SUDAH DIAPPLY ke project lyhemujxjphuyohyckvw (2026-11-11), sebagai migration "shared_savings".
--- Perbaikan lanjutan (REVOKE EXECUTE trigger) diapply terpisah sebagai "shared_savings_revoke_trigger_execute".
+-- STATUS: SUDAH DIAPPLY ke project lyhemujxjphuyohyckvw (2026-11-11), sebagai migration "shared_savings" (versi 20261111114000).
+-- Perbaikan lanjutan (REVOKE EXECUTE trigger) ada di 20261111114419_shared_savings_revoke_trigger_execute.sql.
 -- Migration ini mengasumsikan fungsi public.update_updated_at_column() dan public.profiles sudah ada
 -- (keduanya dibuat di supabase-schema.sql).
 
@@ -547,9 +547,3 @@ GRANT EXECUTE ON FUNCTION
   public.regenerate_invite_code(UUID),
   public.group_member_names(UUID)
   TO authenticated;
-
--- Trigger function tidak perlu dieksekusi siapa pun secara langsung (advisor: anon_security_definer_function_executable).
--- Trigger tetap berjalan; hanya pemanggilan via REST yang dicabut. Diapply sebagai "shared_savings_revoke_trigger_execute".
-REVOKE ALL ON FUNCTION public.log_group_member_activity(), public.log_group_invite_activity(),
-  public.log_group_goal_activity(), public.log_contribution_activity(), public.guard_contribution_update()
-  FROM PUBLIC, anon, authenticated;

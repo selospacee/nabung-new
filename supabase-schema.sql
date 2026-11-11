@@ -230,8 +230,8 @@ CREATE TRIGGER on_auth_user_created
 
 -- =====================================================================
 -- Nabung Bareng (shared savings). Tabel saja; policy RLS, RPC, view,
--- dan trigger aktivitas ada di supabase/migrations/20261111105700_shared_savings.sql.
--- STATUS: pending apply.
+-- dan trigger aktivitas ada di supabase/migrations/20261111114000_shared_savings.sql.
+-- STATUS: sudah diapply ke project Nabung (2026-11-11).
 -- =====================================================================
 
 CREATE TABLE groups (

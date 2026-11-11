@@ -1,6 +1,8 @@
 /**
  * Snapshot of the LIVE Supabase schema for project `lyhemujxjphuyohyckvw` ("Nabung"),
- * captured 2026-10-15.
+ * captured 2026-11-11 (regenerated after the shared-savings migrations were applied).
+ * Base tables only: views (e.g. `goal_progress`) are excluded, since the drift test
+ * expects every snapshot entry to be declared as a table in `supabase-schema.sql`.
  *
  * Why a snapshot instead of parsing `supabase-schema.sql`: the repo's .sql file is stale
  * (it is missing the whole `cashiers` table and `transactions.cashier_id`), so asserting
@@ -33,7 +35,7 @@ export interface LiveSchema {
 
 export const LIVE_SCHEMA: LiveSchema = {
   projectRef: 'lyhemujxjphuyohyckvw',
-  capturedAt: '2026-10-15T09:45:00Z',
+  capturedAt: '2026-11-11T16:27:50Z',
   tables: {
     accounts: {
       columns: {
@@ -138,7 +140,7 @@ export const LIVE_SCHEMA: LiveSchema = {
       checks: { role: ['cashier', 'admin', 'manager'] },
     },
     // Tabel Nabung Bareng: sudah diapply ke project Nabung (2026-11-11). Struktur dicek ulang
-    // terhadap information_schema live; sumber: supabase/migrations/20261111105700_shared_savings.sql.
+    // terhadap information_schema live; sumber: supabase/migrations/20261111114000_shared_savings.sql.
     groups: {
       columns: {
         id: { notNull: true, hasDefault: true },

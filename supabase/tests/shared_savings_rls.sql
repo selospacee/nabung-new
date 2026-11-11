@@ -1,5 +1,5 @@
 -- Skenario RLS & RPC Nabung Bareng.
--- Jalankan SETELAH supabase/migrations/20261111105700_shared_savings.sql, sebagai superuser (postgres),
+-- Jalankan SETELAH supabase/migrations/20261111114000_shared_savings.sql, sebagai superuser (postgres),
 -- di SQL editor atau: psql -v ON_ERROR_STOP=1 -f supabase/tests/shared_savings_rls.sql
 --
 -- Seluruh skrip berada dalam SATU transaksi dan diakhiri ROLLBACK, jadi tidak ada data yang tertinggal.

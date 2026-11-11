@@ -6,10 +6,12 @@ File terkait:
 
 | Berkas | Isi |
 |---|---|
-| `supabase/migrations/20261111105700_shared_savings.sql` | Tabel, index, RLS, grant, helper, view, trigger, RPC |
+| `supabase/migrations/20261111114000_shared_savings.sql` | Migration 1 (`shared_savings`): tabel, index, RLS, grant, helper, view, trigger, RPC |
+| `supabase/migrations/20261111114419_shared_savings_revoke_trigger_execute.sql` | Migration 2 (`shared_savings_revoke_trigger_execute`): cabut EXECUTE fungsi trigger dari `PUBLIC`/`anon`/`authenticated` |
 | `supabase/tests/shared_savings_rls.sql` | 46 pemeriksaan RLS & RPC, dalam satu transaksi yang di-ROLLBACK |
 | `supabase-schema.sql` | Definisi 6 tabel (+ trigger `updated_at`), mengikuti format parser drift-test |
-| `client/src/db/__fixtures__/live-schema.ts` | Entri 6 tabel, ditandai `PENDING APPLY` |
+| `client/src/db/__fixtures__/live-schema.ts` | Snapshot live (base tables), diregenerasi 2026-11-11 |
+
 
 ---
 
@@ -148,18 +150,25 @@ Ini deviasi kecil atau pengisian celah yang tidak dijawab panduan. Tinjau sebelu
 
 ## 7. Yang sudah diverifikasi & yang belum
 
-**Sudah** (cluster PostgreSQL 16.15 lokal, dengan stub `auth` yang meniru `auth.uid()`, role `anon`/`authenticated`, default privileges Supabase, dan `handle_new_user` dari `supabase-schema.sql`):
+**Di live** (project Nabung, PostgreSQL 17.11):
 
-- Migration berhasil diapply tanpa error.
-- `supabase/tests/shared_savings_rls.sql`: **46/46 pemeriksaan lulus**, transaksi di-ROLLBACK, tidak ada sisa data atau schema.
-- Mutation check: empat versi RLS/guard yang sengaja dirusak (cek `user_id` pada setor, cek status goal, guard soft-delete, filter `deleted_at` di view) **semua tertangkap** oleh skrip.
-- Logika drift-test direplikasi dengan Node terhadap `supabase-schema.sql` dan `live-schema.ts`: tidak ada drift.
+- **Dry run sebelum apply:** migration dan `supabase/tests/shared_savings_rls.sql` dijalankan dalam satu transaksi yang di-`ROLLBACK`. Hasil: **46 pemeriksaan lulus** (`SEMUA SKENARIO RLS LULUS`). Setelah itu dicek: tidak ada sisa tabel, schema `rls_test`, atau user test.
+- **Apply:** migration `shared_savings` dan `shared_savings_revoke_trigger_execute` berhasil.
+- **Struktur:** snapshot `live-schema.ts` diregenerasi dari live (2026-11-11). Tabel Nabung Bareng dan tabel lama identik dengan live (nullable, default, dan CHECK).
+- **RLS:** aktif di 6 tabel, 13 policy.
+- **Trigger aktivitas:** tetap berjalan untuk `authenticated` (diuji dalam transaksi yang di-rollback: 1 aktivitas `member_joined` tercatat, dan baris owner terbentuk).
+- **Advisor keamanan (setelah perbaikan):**
+  - *Dari fase ini, diterima:* 11 RPC dan helper bisa dieksekusi `authenticated`. Itu disengaja, karena dipanggil client atau dievaluasi oleh RLS. Helper hanya membocorkan "apakah saya anggota grup dengan UUID ini".
+  - *Sudah ada sebelumnya, belum diubah:* `handle_new_user` dan `rls_auto_enable` bisa dieksekusi `anon`; `handle_new_user` dan `update_updated_at_column` belum punya `search_path` tetap; proteksi password bocor belum aktif.
+  - *Sudah diperbaiki:* empat fungsi trigger aktivitas tidak lagi bisa dieksekusi `anon`.
+
+**Sebelum apply** (PostgreSQL 16.15 lokal, dengan stub `auth`): migration berhasil diapply, skrip RLS 46/46 lulus, empat mutasi yang sengaja merusak RLS/guard tertangkap, dan logika drift-test tidak menemukan drift.
 
 **Belum**:
 
-- `npm test` dan `tsc` tidak bisa dijalankan di sesi ini (tidak ada `node_modules`; registry npm tidak terjangkau).
-- Belum diuji di Supabase sungguhan. Stub tidak meniru semua detail (mis. skema `auth.users` lengkap, Supabase Realtime, PostgREST). Sebaiknya diuji di **Supabase Branch** dulu.
-- Skrip RLS mengasumsikan insert minimal ke `auth.users` berhasil di project. Jika gagal, sesuaikan kolom fixture.
+- `npm test` dan `npx tsc -b --noEmit` belum dijalankan di sesi ini (lihat laporan).
+- Belum ada tes dari sisi client (Fase 1 ke atas).
+- Skrip RLS belum dijalankan di Supabase Branch, karena project belum di paket yang mendukung Branching. Sudah dijalankan di live dalam transaksi yang di-rollback.
 
 ---
 
@@ -175,6 +184,7 @@ Ini deviasi kecil atau pengisian celah yang tidak dijawab panduan. Tinjau sebelu
 
 ## 9. Langkah berikutnya (menunggu persetujuan)
 
-1. Tinjau migration dan skrip RLS.
-2. Setujui apply (idealnya ke Supabase Branch dulu).
-3. Setelah apply: jalankan `supabase/tests/shared_savings_rls.sql` terhadap DB/branch tersebut, regenerasi `live-schema.ts` memakai query di `docs/testing.md`, dan hapus komentar `PENDING APPLY`.
+Fase 0 selesai di live. Yang tersisa:
+
+1. **Keputusan produk couple vs circle** (lihat bagian 4 dan laporan penutup). Bila dipilih "couple setara, circle hanya pembuat goal/owner", dibuat migration baru, setelah persetujuan.
+2. **Fase 1:** lapisan data client, setelah Fase 0 ditutup.
