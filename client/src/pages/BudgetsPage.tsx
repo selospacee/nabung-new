@@ -201,6 +201,7 @@ export function BudgetsPage() {
         const now = new Date().toISOString()
         if (editingBudgetId) {
           await db.budgets.update(editingBudgetId, {
+            updatedAt: now,
             limitAmount: limitCents,
             alertThreshold: parseInt(form.alertThreshold),
             rollover: form.rollover,
@@ -215,6 +216,7 @@ export function BudgetsPage() {
             alertThreshold: parseInt(form.alertThreshold),
             rollover: form.rollover,
             createdAt: now,
+            updatedAt: now,
           })
         }
         setShowForm(false)

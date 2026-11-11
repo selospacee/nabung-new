@@ -181,7 +181,6 @@ export function ReportsPage() {
   }, [filteredTxns, categories])
 
   // Summary stats
-  const cashiers = useCashiers(userId, false)
 
     // Summary stats
     const stats = useMemo(() => {
@@ -191,31 +190,6 @@ export function ReportsPage() {
       return { income, expense, net: income - expense, count: filteredTxns.length }
     }, [filteredTxns])
 
-    // Cashier performance breakdown
-    const cashierBreakdown = useMemo(() => {
-      if (!cashiers || filteredTxns.length === 0) return []
-    
-      return cashiers.map(cashier => {
-        const cashierTxns = filteredTxns.filter(t => t.cashierId === cashier.id)
-        const income = cashierTxns.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-        const expense = cashierTxns.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
-        const totalCups = cashierTxns.filter(t => t.type === 'income').reduce((s, t) => s + (t.amount / 100), 0) // 1 unit = 1 cup
-        const commissionEarned = totalCups * (cashier.cupCommission || 0)
-        const totalPay = (cashier.baseSalary || 0) + commissionEarned
-      
-        return {
-          cashier,
-          transactions: cashierTxns,
-          income,
-          expense,
-          net: income - expense,
-          totalCups,
-          commissionEarned,
-          totalPay,
-          count: cashierTxns.length,
-        }
-      }).filter(c => c.count > 0)
-    }, [cashiers, filteredTxns])
 
   // Export CSV
       const exportCsv = () => {
@@ -226,11 +200,10 @@ export function ReportsPage() {
                 const needsQuote = s.includes(',') || s.includes('"') || s.includes('\n')
                 return needsQuote ? '"' + s.replace(/"/g, '""') + '"' : s
               }
-              const header = 'Date,Merchant,Description,Category,Type,Amount,Account,Location,Latitude,Longitude,Cashier\n'
+              const header = 'Date,Merchant,Description,Category,Type,Amount,Account,Location,Latitude,Longitude\n'
               const rows = filteredTxns.map(tx => {
                 const cat = categories?.find(c => c.id === tx.categoryId)
-                const cashier = cashiers?.find(c => c.id === tx.cashierId)
-                return `${escape(tx.date)},${escape(tx.merchant)},${escape(tx.description)},${escape(cat ? cat.name : 'Uncategorized')},${escape(tx.type)},${escape(tx.amount)},${escape(tx.accountId)},${escape(tx.location || '')},${escape(tx.latitude ?? '')},${escape(tx.longitude ?? '')},${escape(cashier ? cashier.name : '')}`
+                return `${escape(tx.date)},${escape(tx.merchant)},${escape(tx.description)},${escape(cat ? cat.name : 'Uncategorized')},${escape(tx.type)},${escape(tx.amount)},${escape(tx.accountId)},${escape(tx.location || '')},${escape(tx.latitude ?? '')},${escape(tx.longitude ?? '')}`
               }).join('\n')
               const blob = new Blob([header + rows], { type: 'text/csv' })
               const url = URL.createObjectURL(blob)
@@ -241,26 +214,6 @@ export function ReportsPage() {
               URL.revokeObjectURL(url)
             }
 
-            const exportCashierCsv = () => {
-              if (!cashierBreakdown.length) return
-              const escape = (val: string | number | null | undefined): string => {
-                const s = val == null ? '' : String(val)
-                const needsQuote = s.includes(',') || s.includes('"') || s.includes('\n')
-                return needsQuote ? '"' + s.replace(/"/g, '""') + '"' : s
-              }
-              const header = 'Cashier,Role,Transactions,Cups Sold,Income,Expense,Net,Commission/Cup,Commission Earned,Base Salary,Total Pay\n'
-              const rows = cashierBreakdown.map(item => {
-                return `${escape(item.cashier.name)},${escape(item.cashier.role)},${escape(item.count)},${escape(item.totalCups)},${escape(item.income)},${escape(item.expense)},${escape(item.net)},${escape(item.cashier.cupCommission || 0)},${escape(item.commissionEarned)},${escape(item.cashier.baseSalary || 0)},${escape(item.totalPay)}`
-              }).join('\n')
-              const totalRow = `TOTAL,,${cashierBreakdown.reduce((s, c) => s + c.count, 0)},${cashierBreakdown.reduce((s, c) => s + c.totalCups, 0)},${cashierBreakdown.reduce((s, c) => s + c.income, 0)},${cashierBreakdown.reduce((s, c) => s + c.expense, 0)},${cashierBreakdown.reduce((s, c) => s + c.net, 0)},,${cashierBreakdown.reduce((s, c) => s + c.commissionEarned, 0)},${cashierBreakdown.reduce((s, c) => s + (c.cashier.baseSalary || 0), 0)},${cashierBreakdown.reduce((s, c) => s + c.totalPay, 0)}`
-              const blob = new Blob([header + rows + '\n' + totalRow], { type: 'text/csv' })
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url
-              a.download = `nabung-payroll-${toISODate(new Date())}.csv`
-              a.click()
-              URL.revokeObjectURL(url)
-            }
 
   return (
     <div className="space-y-6">
@@ -303,11 +256,6 @@ export function ReportsPage() {
                   <Button variant="outline" size="sm" onClick={exportCsv} disabled={!filteredTxns.length}>
                     <Download className="w-4 h-4 mr-1" /> Export CSV
                   </Button>
-                  {cashierBreakdown.length > 0 && (
-                    <Button variant="outline" size="sm" onClick={exportCashierCsv}>
-                      <Download className="w-4 h-4 mr-1" /> Export Payroll
-                    </Button>
-                  )}
                 </div>
       </div>
 
@@ -350,59 +298,6 @@ export function ReportsPage() {
           </CardContent>
         </Card>
       </div>
-
-            {/* Cashier Performance Section */}
-            {cashierBreakdown.length > 0 && (
-              <Card className="mb-4">
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Users className="w-4 h-4" /> Cashier Performance
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-left text-muted-foreground border-b border-border">
-                          <th className="pb-2 font-medium">Cashier</th>
-                          <th className="pb-2 font-medium text-right">Transactions</th>
-                          <th className="pb-2 font-medium text-right">Cups Sold</th>
-                          <th className="pb-2 font-medium text-right">Income</th>
-                          <th className="pb-2 font-medium text-right">Expense</th>
-                          <th className="pb-2 font-medium text-right">Net</th>
-                          <th className="pb-2 font-medium text-right">Commission</th>
-                          <th className="pb-2 font-medium text-right">Est. Pay</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {cashierBreakdown.map(item => (
-                          <tr key={item.cashier.id}>
-                            <td className="py-3 font-medium">{item.cashier.name} <span className="text-muted-foreground text-xs capitalize">({item.cashier.role})</span></td>
-                            <td className="py-3 text-right">{item.count}</td>
-                            <td className="py-3 text-right font-mono">{item.totalCups.toLocaleString()}</td>
-                            <td className="py-3 text-right font-mono text-income">{formatCurrency(item.income, currency)}</td>
-                            <td className="py-3 text-right font-mono text-expense">{formatCurrency(item.expense, currency)}</td>
-                            <td className="py-3 text-right font-mono">{formatCurrency(item.net, currency)}</td>
-                            <td className="py-3 text-right font-mono text-primary">{formatCurrency(item.commissionEarned, currency)}</td>
-                            <td className="py-3 text-right font-bold font-mono text-primary">{formatCurrency(item.totalPay, currency)}</td>
-                          </tr>
-                        ))}
-                        <tr className="font-semibold bg-secondary/50">
-                          <td className="py-3">TOTAL</td>
-                          <td className="py-3 text-right">{cashierBreakdown.reduce((s, c) => s + c.count, 0)}</td>
-                          <td className="py-3 text-right font-mono">{cashierBreakdown.reduce((s, c) => s + c.totalCups, 0).toLocaleString()}</td>
-                          <td className="py-3 text-right font-mono text-income">{formatCurrency(cashierBreakdown.reduce((s, c) => s + c.income, 0), currency)}</td>
-                          <td className="py-3 text-right font-mono text-expense">{formatCurrency(cashierBreakdown.reduce((s, c) => s + c.expense, 0), currency)}</td>
-                          <td className="py-3 text-right font-mono">{formatCurrency(cashierBreakdown.reduce((s, c) => s + c.net, 0), currency)}</td>
-                          <td className="py-3 text-right font-mono text-primary">{formatCurrency(cashierBreakdown.reduce((s, c) => s + c.commissionEarned, 0), currency)}</td>
-                          <td className="py-3 text-right font-bold font-mono text-primary">{formatCurrency(cashierBreakdown.reduce((s, c) => s + c.totalPay, 0), currency)}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
 
             {/* Map Section */}
       <Card className="mb-4">

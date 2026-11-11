@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { v4 as uuid } from 'uuid'
-import { useCurrentUser, useTransactions, useAccounts, useCategories, useDefaultAccount, useAccountBalances, useCashiers } from '../db/hooks'
+import { useCurrentUser, useTransactions, useAccounts, useCategories, useDefaultAccount, useAccountBalances } from '../db/hooks'
 import { cn, Card, CardHeader, CardTitle, CardContent, Button, Badge, Dialog, Input, Select, Textarea, EmptyState, Skeleton, Tabs, Alert } from '../components/ui'
 import { formatCurrency, centsToDisplay, centsToDisplaySigned, displayToCents } from '../utils/currency'
 import { formatDate, toISODate } from '../utils/dates'
@@ -305,8 +305,6 @@ export function TransactionsPage() {
       // Push to Supabase
       await pushLocalChangesToSupabase(userId || '')
     }
-
-  const cashiers = useCashiers(userId)
 
   const [form, setForm] = useState({
         type: 'expense' as 'income' | 'expense' | 'transfer',
@@ -735,12 +733,6 @@ export function TransactionsPage() {
                             {cat.name}
                           </Badge>
                         )}
-                        {tx.cashierId && cashiers && (
-                          <Badge variant="secondary" className="text-[10px]">
-                            <Users className="w-2.5 h-2.5 mr-1" />
-                            {cashiers.find(c => c.id === tx.cashierId)?.name}
-                          </Badge>
-                        )}
                         <span className="text-xs text-muted-foreground">
                           {formatDate(tx.date)} {(account || defaultAccount) && `· ${(account || defaultAccount)?.name}`}
                         </span>
@@ -854,17 +846,6 @@ export function TransactionsPage() {
                       {c.name}
                     </span>
                   </option>
-                ))}
-              </Select>
-
-              <Select
-                label="Cashier"
-                value={form.cashierId}
-                onChange={e => setForm(f => ({ ...f, cashierId: e.target.value }))}
-              >
-                <option value="">Select cashier (optional)</option>
-                {cashiers?.map(c => (
-                  <option key={c.id} value={c.id}>{c.name} ({c.role})</option>
                 ))}
               </Select>
 

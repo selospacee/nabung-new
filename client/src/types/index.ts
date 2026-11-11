@@ -81,6 +81,7 @@ export interface Budget {
   alertThreshold: number
   rollover: boolean
   createdAt: string
+  updatedAt?: string
 }
 
 export interface SavingsGoal {

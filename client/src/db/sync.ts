@@ -155,8 +155,13 @@ export async function syncUserDataFromSupabase(userId: string): Promise<void> {
     if (budgetsError) throw budgetsError
     
     if (budgets && budgets.length > 0) {
-      const budgetsData = budgets.map(toCamelCase) as unknown as Budget[]
-      await db.budgets.bulkPut(budgetsData)
+      const localBudgets = new Map((await db.budgets.toArray()).map(b => [b.id, b] as const))
+      const budgetsData = (budgets.map(toCamelCase) as unknown as Budget[]).filter(remote => {
+        const local = localBudgets.get(remote.id)
+        // Keep local edits that have not reached the server yet (local is newer).
+        return !(local?.updatedAt && remote.updatedAt && Date.parse(local.updatedAt) > Date.parse(remote.updatedAt))
+      })
+      if (budgetsData.length > 0) await db.budgets.bulkPut(budgetsData)
       console.log('[Sync] Synced', budgetsData.length, 'budgets')
     }
 
