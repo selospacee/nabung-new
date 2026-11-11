@@ -11,6 +11,7 @@ import { useAsyncAction } from '../hooks/useAsyncAction'
 import type { Transaction as TxType } from '../types'
 import { db } from '../db'
 import { pushAndReport } from '../db/pushAndReport'
+import { pickCategoryId } from '../utils/pickCategory'
 
 type TxTypeName = TxType['type']
 
@@ -163,6 +164,12 @@ export function AddTransactionModal({
     track.applyConstraints({ advanced: [{ zoom: zoomLevel } as MediaTrackConstraintSet] }).catch(() => {})
   }, [zoomLevel, maxZoom, cam.active, cam.getVideoTrack])
 
+  // Auto-open the camera when the capture tab is shown (opening the modal is the user's explicit action).
+  // It is released again on close / tab change / capture, so it never runs in the background.
+  useEffect(() => {
+    if (open && activeTab === 'camera') void openCamera()
+  }, [open, activeTab]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const grabFrame = (): string | null => {
     const video = cam.getVideoEl()
     if (!video || !video.videoWidth) return null
@@ -211,9 +218,9 @@ export function AddTransactionModal({
       type: ocrResult.suggestedType || 'expense',
       amount: ocrResult.total ? String(ocrResult.total / 100) : '',
       date: ocrResult.date || toISODate(new Date()),
-      categoryId: ocrResult.suggestedCategoryId || '',
-      merchant: ocrResult.merchant || '',
-      description: ocrResult.merchant || '',
+      categoryId: pickCategoryId(categories, ocrResult.suggestedType || 'expense', ocrResult.suggestedCategoryId),
+      merchant: '',
+      description: '',
       receiptImage,
       receiptOcrText: ocrResult.text ?? null,
       location: '',
@@ -231,9 +238,9 @@ export function AddTransactionModal({
       type: p.suggestedType || 'expense',
       amount: p.amount ? String(p.amount / 100) : '',
       date: p.date || toISODate(new Date()),
-      categoryId: p.suggestedCategoryId || '',
-      merchant: p.merchant || '',
-      description: p.description || p.merchant || '',
+      categoryId: pickCategoryId(categories, p.suggestedType || 'expense', p.suggestedCategoryId),
+      merchant: '',
+      description: p.description || '',
       receiptImage: null,
       receiptOcrText: null,
       location: p.location || '',
@@ -278,10 +285,10 @@ export function AddTransactionModal({
       type: ocrResult.suggestedType || 'expense',
       amount: ocrResult.total,
       date: ocrResult.date,
-      categoryId: ocrResult.suggestedCategoryId || null,
+      categoryId: pickCategoryId(categories, ocrResult.suggestedType || 'expense', ocrResult.suggestedCategoryId) || null,
       accountId: defaultAccountId,
-      merchant: ocrResult.merchant || '',
-      description: ocrResult.merchant || '',
+      merchant: '',
+      description: '',
       notes: '',
       receiptImage,
       receiptOcrText: ocrResult.text ?? null,
@@ -304,10 +311,10 @@ export function AddTransactionModal({
       type: p.suggestedType || 'expense',
       amount: p.amount,
       date: p.date,
-      categoryId: p.suggestedCategoryId || null,
+      categoryId: pickCategoryId(categories, p.suggestedType || 'expense', p.suggestedCategoryId) || null,
       accountId: defaultAccountId,
-      merchant: p.merchant || '',
-      description: p.description || p.merchant || '',
+      merchant: '',
+      description: p.description || '',
       notes: '',
       receiptImage: null,
       receiptOcrText: null,
@@ -334,7 +341,7 @@ export function AddTransactionModal({
         date: form.date,
         categoryId: form.categoryId,
         accountId: form.accountId,
-        merchant: form.merchant,
+        merchant: '',
         description: form.description,
         notes: form.notes,
         receiptImage: form.receiptImage,
@@ -560,10 +567,6 @@ export function AddTransactionModal({
                         <span className="font-mono">{voiceCtx.parsed.date}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Merchant:</span>
-                        <span>{voiceCtx.parsed.merchant || '—'}</span>
-                      </div>
-                      <div className="flex justify-between">
                         <span className="text-muted-foreground">Description:</span>
                         <span>{voiceCtx.parsed.description || '—'}</span>
                       </div>
@@ -641,13 +644,6 @@ export function AddTransactionModal({
               </Select>
 
               <Input
-                label="Merchant"
-                value={form.merchant}
-                onChange={e => setForm(f => ({ ...f, merchant: e.target.value }))}
-                placeholder="e.g. Starbucks"
-              />
-
-              <Input
                 label="Description"
                 value={form.description}
                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
@@ -713,12 +709,6 @@ export function AddTransactionModal({
             {ocrResult && (
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
-                  {ocrResult.merchant && (
-                    <div className="p-3 rounded-lg border border-border bg-card">
-                      <span className="text-xs text-muted-foreground">Merchant</span>
-                      <p className="font-medium text-sm mt-0.5">{ocrResult.merchant}</p>
-                    </div>
-                  )}
                   {ocrResult.total && (
                     <div className="p-3 rounded-lg border border-border bg-card">
                       <span className="text-xs text-muted-foreground">Total</span>

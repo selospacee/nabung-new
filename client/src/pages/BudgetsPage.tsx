@@ -156,7 +156,7 @@ export function BudgetsPage() {
     }, {} as Record<string, any>)
   }, [budgets])
 
-  const resetForm = (budget?: any) => {
+  const resetForm = (budget?: any, categoryId?: string) => {
     if (budget) {
       setForm({
         categoryId: budget.categoryId,
@@ -166,7 +166,7 @@ export function BudgetsPage() {
       })
       setEditingBudgetId(budget.id)
     } else {
-      setForm({ categoryId: '', limitAmount: '', alertThreshold: '80', rollover: false })
+      setForm({ categoryId: categoryId || '', limitAmount: '', alertThreshold: '80', rollover: false })
       setEditingBudgetId(null)
     }
     setShowForm(true)
@@ -193,6 +193,7 @@ export function BudgetsPage() {
   const submitForm = async (e: React.FormEvent) => {
     e.preventDefault()
     if (activeTab === 'budgets') {
+      if (!form.categoryId) return
       const limitCents = Math.round(parseFloat(form.limitAmount) * 100) || 0
 
       setSaving(true)
@@ -398,9 +399,6 @@ export function BudgetsPage() {
               >
                 <RefreshCw className="w-4 h-4 mr-1" /> Reset All
               </Button>
-              <Button variant="default" size="sm" onClick={() => resetForm()}>
-                <Plus className="w-4 h-4 mr-1" /> Add Budget
-              </Button>
             </div>
           </div>
 
@@ -420,68 +418,55 @@ export function BudgetsPage() {
             <div className="space-y-3">
               {categoryBudgets.map(cat => (
                 <Card key={cat.id} className="group">
-                  <div className="p-4">
-                    {cat.isSet ? (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-                            style={{ backgroundColor: (cat.color || '#6B7280') + '20' }}>
-                            <span className="text-sm font-bold" style={{ color: cat.color || '#6B7280' }}>
-                              {cat.icon?.[0] || '·'}
-                            </span>
-                          </div>
-                          <div className="min-w-0">
-                            <h3 className="font-medium text-foreground text-sm">{cat.name}</h3>
-                            <div className="flex items-center gap-3 mt-1 text-xs">
+                  <div className="p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                          style={{ backgroundColor: (cat.color || '#6B7280') + '20' }}>
+                          <span className="text-sm font-bold" style={{ color: cat.color || '#6B7280' }}>
+                            {cat.icon?.[0] || '·'}
+                          </span>
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="font-medium text-foreground text-sm truncate">{cat.name}</h3>
+                          {cat.isSet ? (
+                            <div className="flex flex-wrap items-center gap-x-3 text-xs">
                               <span>
                                 <span className="text-muted-foreground">Spent: </span>
-                                <span className="font-mono text-foreground">
-                                  {formatCurrency(cat.spent, currency)}
-                                </span>
+                                <span className="font-mono text-foreground">{formatCurrency(cat.spent, currency)}</span>
+                              </span>
+                              <span>
+                                <span className="text-muted-foreground">Limit: </span>
+                                <span className="font-mono">{formatCurrency(cat.effectiveLimit, currency)}</span>
                               </span>
                               {cat.carriedOver > 0 && (
                                 <span>
                                   <span className="text-muted-foreground">Rollover: </span>
-                                  <span className="font-mono text-success">
-                                    +{formatCurrency(cat.carriedOver, currency)}
-                                  </span>
+                                  <span className="font-mono text-success">+{formatCurrency(cat.carriedOver, currency)}</span>
                                 </span>
                               )}
-                              <span>
-                                <span className="text-muted-foreground">Limit: </span>
-                                <span className="font-mono">
-                                  {formatCurrency(cat.effectiveLimit, currency)}
-                                </span>
-                              </span>
                             </div>
-                          </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">No budget set this month</p>
+                          )}
                         </div>
+                      </div>
 
-                        <div className="flex items-center gap-4">
-                          {/* Progress bar */}
-                          <div className="w-32">
-                            <Progress
-                              value={cat.spent}
-                              max={cat.effectiveLimit}
-                              color={cat.isOver ? '#EF4444' : cat.isWarning ? '#F59E0B' : undefined} showLabel
-                            />
-                          </div>
-
-                          {/* Alerts */}
-                          {cat.isOver && (
-                            <Badge variant="destructive" className="text-xs">
-                              <AlertTriangle className="w-3 h-3 mr-1" />
-                              Over budget!
-                            </Badge>
-                          )}
-                          {cat.isWarning && !cat.isOver && (
-                            <Badge variant="warning" className="text-xs">
-                              <AlertTriangle className="w-3 h-3 mr-1" />
-                              {Math.round(cat.pct)}%
-                            </Badge>
-                          )}
-
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-2 shrink-0">
+                        {cat.isOver && (
+                          <Badge variant="destructive" className="text-xs">
+                            <AlertTriangle className="w-3 h-3 mr-1" />
+                            Over budget!
+                          </Badge>
+                        )}
+                        {cat.isWarning && !cat.isOver && (
+                          <Badge variant="warning" className="text-xs">
+                            <AlertTriangle className="w-3 h-3 mr-1" />
+                            {Math.round(cat.pct)}%
+                          </Badge>
+                        )}
+                        {cat.isSet ? (
+                          <div className="flex gap-1">
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => resetForm(cat.budget)}>
                               <Edit3 className="w-3.5 h-3.5" />
                             </Button>
@@ -489,26 +474,22 @@ export function BudgetsPage() {
                               <Trash2 className="w-3.5 h-3.5" />
                             </Button>
                           </div>
-                        </div>
+                        ) : (
+                          <Button variant="outline" size="sm" onClick={() => resetForm(undefined, cat.id)}>
+                            Set Budget
+                          </Button>
+                        )}
                       </div>
-                    ) : (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-lg flex items-center justify-center"
-                            style={{ backgroundColor: (cat.color || '#6B7280') + '20' }}>
-                            <span className="text-sm font-bold" style={{ color: cat.color || '#6B7280' }}>
-                              {cat.icon?.[0] || '·'}
-                            </span>
-                          </div>
-                          <div>
-                            <h3 className="font-medium text-foreground text-sm">{cat.name}</h3>
-                            <p className="text-xs text-muted-foreground">Spent: {formatCurrency(cat.spent, currency)}</p>
-                          </div>
-                        </div>
-                        <Button variant="outline" size="sm" onClick={() => resetForm()}>
-                          Set Budget
-                        </Button>
-                      </div>
+                    </div>
+
+                    {cat.isSet && (
+                      <Progress
+                        value={cat.spent}
+                        max={cat.effectiveLimit || 1}
+                        color={cat.isOver ? '#EF4444' : cat.isWarning ? '#F59E0B' : undefined}
+                        showLabel
+                        className="w-full"
+                      />
                     )}
                   </div>
                 </Card>
@@ -525,18 +506,12 @@ export function BudgetsPage() {
                 </h3>
 
                 <div className="space-y-3">
-                  <Select
-                    label="Category"
-                    value={form.categoryId}
-                    onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))}
-                  >
-                    <option value="">Select category</option>
-                    {categories?.filter(c => c.type === 'expense').map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </Select>
+                  <div className="rounded-lg border border-border bg-secondary/40 px-3 py-2">
+                    <span className="text-xs text-muted-foreground">Category</span>
+                    <p className="font-medium text-foreground text-sm">
+                      {categories?.find(c => c.id === form.categoryId)?.name ?? '—'}
+                    </p>
+                  </div>
 
                   <Input
                     label="Monthly Limit"

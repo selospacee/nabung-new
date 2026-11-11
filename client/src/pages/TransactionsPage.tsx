@@ -365,7 +365,7 @@ export function TransactionsPage() {
                         categoryId: form.categoryId || null,
                         accountId: form.accountId || defaultAccount?.id || (accounts?.[0]?.id || ''),
                         description: form.description,
-                        merchant: form.merchant,
+                        merchant: '',
                         notes: form.notes,
                         receiptImage: form.receiptImage,
                         receiptOcrText: form.receiptOcrText,
@@ -381,7 +381,7 @@ export function TransactionsPage() {
                         categoryId: form.categoryId || null,
                         accountId: form.accountId || defaultAccount?.id || (accounts?.[0]?.id || ''),
                         description: form.description,
-                        merchant: form.merchant,
+                        merchant: '',
                         notes: form.notes,
                         receiptImage: form.receiptImage,
                         receiptOcrText: form.receiptOcrText,
@@ -414,10 +414,10 @@ export function TransactionsPage() {
                     type: voiceCtx.parsed.suggestedType || 'expense',
                     amount: voiceCtx.parsed.amount,
                     date: voiceCtx.parsed.date,
-                    categoryId: voiceCtx.parsed.suggestedCategoryId || null,
+                    categoryId: pickCategoryId(categories, voiceCtx.parsed.suggestedType || 'expense', voiceCtx.parsed.suggestedCategoryId) || null,
                     accountId: defaultAccount?.id || (accounts?.[0]?.id || ''),
                     description: voiceCtx.parsed.description,
-                    merchant: voiceCtx.parsed.merchant,
+                    merchant: '',
                     notes: '',
                     receiptImage: null,
                     receiptOcrText: null,
@@ -443,9 +443,9 @@ export function TransactionsPage() {
       type: p.suggestedType || 'expense',
       amount: p.amount ? String(p.amount / 100) : '',
       date: p.date || toISODate(new Date()),
-      categoryId: p.suggestedCategoryId || '',
-      merchant: p.merchant || '',
-      description: p.description || p.merchant || '',
+      categoryId: pickCategoryId(categories, p.suggestedType || 'expense', p.suggestedCategoryId),
+      merchant: '',
+      description: p.description || '',
       location: p.location || '',
       latitude: p.latitude ?? null,
       longitude: p.longitude ?? null,
@@ -463,9 +463,9 @@ export function TransactionsPage() {
       type: ocrResult.suggestedType || 'expense',
       amount: ocrResult.total ? String(ocrResult.total / 100) : '',
       date: ocrResult.date || toISODate(new Date()),
-      categoryId: ocrResult.suggestedCategoryId || '',
-      merchant: ocrResult.merchant || '',
-      description: ocrResult.merchant || '',
+      categoryId: pickCategoryId(categories, ocrResult.suggestedType || 'expense', ocrResult.suggestedCategoryId),
+      merchant: '',
+      description: '',
       receiptImage,
       receiptOcrText: ocrResult.text ?? null,
     }))
@@ -528,10 +528,10 @@ export function TransactionsPage() {
                     type: ocrResult.suggestedType || 'expense',
                     amount: ocrResult.total,
                     date: ocrResult.date,
-                    categoryId: ocrResult.suggestedCategoryId || null,
+                    categoryId: pickCategoryId(categories, ocrResult.suggestedType || 'expense', ocrResult.suggestedCategoryId) || null,
                     accountId: defaultAccount?.id || (accounts?.[0]?.id || ''),
-                    description: ocrResult.merchant || '',
-                    merchant: ocrResult.merchant || '',
+                    description: '',
+                    merchant: '',
                     notes: '',
                     receiptImage: receiptImage,
                     receiptOcrText: ocrResult.text,
@@ -868,13 +868,6 @@ export function TransactionsPage() {
               </Select>
 
               <Input
-                label="Merchant"
-                value={form.merchant}
-                onChange={e => setForm(f => ({ ...f, merchant: e.target.value }))}
-                placeholder="e.g. Starbucks"
-              />
-
-              <Input
                 label="Description"
                 value={form.description}
                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
@@ -1022,10 +1015,6 @@ export function TransactionsPage() {
                       <span className="font-mono">{voiceCtx.parsed.date}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Merchant:</span>
-                      <span>{voiceCtx.parsed.merchant || '—'}</span>
-                    </div>
-                    <div className="flex justify-between">
                       <span className="text-muted-foreground">Description:</span>
                       <span>{voiceCtx.parsed.description || '—'}</span>
                     </div>
@@ -1089,12 +1078,6 @@ export function TransactionsPage() {
           {ocrResult && (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                {ocrResult.merchant && (
-                  <div className="p-3 rounded-lg border border-border bg-card">
-                    <span className="text-xs text-muted-foreground">Merchant</span>
-                    <p className="font-medium text-sm mt-0.5">{ocrResult.merchant}</p>
-                  </div>
-                )}
                 {ocrResult.total && (
                   <div className="p-3 rounded-lg border border-border bg-card">
                     <span className="text-xs text-muted-foreground">Total</span>
@@ -1157,9 +1140,9 @@ export function TransactionsPage() {
                             type: ocrResult.suggestedType || 'expense',
                             amount: ocrResult.total ? String(ocrResult.total / 100) : '',
                             date: ocrResult.date || toISODate(new Date()),
-                            categoryId: ocrResult.suggestedCategoryId || '',
-                            merchant: ocrResult.merchant || '',
-                            description: ocrResult.merchant || '',
+                            categoryId: pickCategoryId(categories, ocrResult.suggestedType || 'expense', ocrResult.suggestedCategoryId),
+                            merchant: '',
+                            description: '',
                             receiptImage: receiptImage,
                             receiptOcrText: ocrResult.text,
                             latitude: null,
