@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useSupabaseAuth } from '../auth/SupabaseAuthContext'
 import { Button } from '../components/ui'
 import { Input, Select } from '../components/ui'
-import { DollarSign, Globe, Clock, Mail, User, Loader2 } from 'lucide-react'
+import { useAsyncAction } from '../hooks/useAsyncAction'
+import { DollarSign, Globe, Mail, User, Loader2 } from 'lucide-react'
 
 const CURRENCIES = [
   { value: 'USD', label: 'USD ($) - US Dollar' },
@@ -32,6 +33,7 @@ const TIMEZONES = [
 
 export function OnboardingPage() {
   const { login, signUp, isLoading } = useSupabaseAuth()
+  const { run, pending: loading } = useAsyncAction()
   const [mode, setMode] = useState<'login' | 'signUp'>('signUp')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -39,7 +41,6 @@ export function OnboardingPage() {
   const [currency, setCurrency] = useState('IDR')
   const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone)
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
 
   if (isLoading) {
     return (
@@ -49,37 +50,32 @@ export function OnboardingPage() {
     )
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-      e.preventDefault()
-      console.log('[Onboarding] Submit:', mode)
-      setError('')
-      setLoading(true)
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    // run() ignores the call while a previous submit is still in flight (double-submit guard).
+    void run(async () => {
       try {
         if (mode === 'login') {
-          if (!email.trim()) { setError('Email is required'); setLoading(false); return }
-          if (!password) { setError('Password is required'); setLoading(false); return }
-          console.log('[Onboarding] Calling login...')
+          if (!email.trim()) throw new Error('Email is required')
+          if (!password) throw new Error('Password is required')
           await login(email.trim(), password)
-          console.log('[Onboarding] Login returned, isLoading should be false now')
         } else {
-          if (!name.trim()) { setError('Name is required'); setLoading(false); return }
-          if (!email.trim()) { setError('Email is required'); setLoading(false); return }
-          if (!password) { setError('Password is required'); setLoading(false); return }
-          console.log('[Onboarding] Calling signUp...')
+          if (!name.trim()) throw new Error('Name is required')
+          if (!email.trim()) throw new Error('Email is required')
+          if (!password) throw new Error('Password is required')
           await signUp(email.trim(), password, name.trim(), currency, timezone)
-          console.log('[Onboarding] SignUp returned, isLoading should be false now')
         }
       } catch (err: any) {
         console.error('[Onboarding] Error:', err)
-        setError(err.message || 'Failed to authenticate')
-        setLoading(false)
+        setError(err?.message || 'Failed to authenticate')
       }
-    }
+    })
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
-        {/* Logo */}
         <div className="text-center mb-8">
           <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-4">
             <span className="text-white font-bold text-3xl">N</span>
@@ -88,16 +84,17 @@ export function OnboardingPage() {
           <p className="text-muted-foreground mt-1">Personal Finance Tracker</p>
         </div>
 
-        {/* Mode toggle */}
         <div className="flex items-center justify-center gap-4 mb-6">
           <button
-            onClick={() => setMode('login')}
+            type="button"
+            onClick={() => { setMode('login'); setError('') }}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${mode === 'login' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:bg-secondary/80'}`}
           >
             Login
           </button>
           <button
-            onClick={() => setMode('signUp')}
+            type="button"
+            onClick={() => { setMode('signUp'); setError('') }}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${mode === 'signUp' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:bg-secondary/80'}`}
           >
             Sign Up
@@ -111,27 +108,13 @@ export function OnboardingPage() {
                 <label className="text-sm font-medium text-foreground flex items-center gap-2">
                   <Mail className="w-4 h-4 text-muted-foreground" /> Email
                 </label>
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  autoFocus
-                  className="w-full"
-                />
+                <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" autoFocus className="w-full" />
               </div>
-
               <div className="space-y-1">
                 <label className="text-sm font-medium text-foreground flex items-center gap-2">
                   <User className="w-4 h-4 text-muted-foreground" /> Password
                 </label>
-                <Input
-                  type="password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  className="w-full"
-                />
+                <Input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter your password" className="w-full" />
               </div>
             </>
           )}
@@ -142,69 +125,35 @@ export function OnboardingPage() {
                 <label className="text-sm font-medium text-foreground flex items-center gap-2">
                   <User className="w-4 h-4 text-muted-foreground" /> Your Name
                 </label>
-                <Input
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="Enter your name"
-                  autoFocus
-                  className="w-full"
-                />
+                <Input value={name} onChange={e => setName(e.target.value)} placeholder="Enter your name" autoFocus className="w-full" />
               </div>
-
               <div className="space-y-1">
                 <label className="text-sm font-medium text-foreground flex items-center gap-2">
                   <Mail className="w-4 h-4 text-muted-foreground" /> Email
                 </label>
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  className="w-full"
-                />
+                <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" className="w-full" />
               </div>
-
               <div className="space-y-1">
                 <label className="text-sm font-medium text-foreground flex items-center gap-2">
                   <DollarSign className="w-4 h-4 text-muted-foreground" /> Currency
                 </label>
-                <Select
-                  value={currency}
-                  onChange={e => setCurrency(e.target.value)}
-                  className="w-full"
-                >
-                  {CURRENCIES.map(c => (
-                    <option key={c.value} value={c.value}>{c.label}</option>
-                  ))}
+                <Select value={currency} onChange={e => setCurrency(e.target.value)} className="w-full">
+                  {CURRENCIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </Select>
               </div>
-
               <div className="space-y-1">
                 <label className="text-sm font-medium text-foreground flex items-center gap-2">
                   <Globe className="w-4 h-4 text-muted-foreground" /> Timezone
                 </label>
-                <Select
-                  value={timezone}
-                  onChange={e => setTimezone(e.target.value)}
-                  className="w-full"
-                >
-                  {TIMEZONES.map(tz => (
-                    <option key={tz} value={tz}>{tz}</option>
-                  ))}
+                <Select value={timezone} onChange={e => setTimezone(e.target.value)} className="w-full">
+                  {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
                 </Select>
               </div>
-
               <div className="space-y-1">
                 <label className="text-sm font-medium text-foreground flex items-center gap-2">
                   <User className="w-4 h-4 text-muted-foreground" /> Password
                 </label>
-                <Input
-                  type="password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="Create a password"
-                  className="w-full"
-                />
+                <Input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Create a password" className="w-full" />
               </div>
             </>
           )}
@@ -214,13 +163,10 @@ export function OnboardingPage() {
           )}
 
           <div className="flex gap-3 pt-2">
-            <Button
-              type="submit"
-              className="flex-1"
-              disabled={loading}
-            >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-              {mode === 'login' ? 'Login' : 'Create Profile'}
+            <Button type="submit" className="flex-1" loading={loading}>
+              {loading
+                ? (mode === 'login' ? 'Logging in...' : 'Creating profile...')
+                : (mode === 'login' ? 'Login' : 'Create Profile')}
             </Button>
           </div>
         </form>

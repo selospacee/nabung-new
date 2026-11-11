@@ -80,6 +80,12 @@ export function useSpeechToText(categories: Category[]) {
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const transcriptRef = useRef('')
 
+  // Stop the microphone when the component using this hook unmounts.
+  useEffect(() => () => {
+    try { recognitionRef.current?.stop() } catch {}
+    recognitionRef.current = null
+  }, [])
+
   const parseTranscript = useCallback((text: string): ParsedTransaction => {
     const lower = text.toLowerCase().trim()
     let remaining = text.trim()

@@ -22,6 +22,47 @@ function toSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
   return result
 }
 
+// PostgREST returns at most 1000 rows per request, so page through the table.
+async function fetchAllRows(table: string, userId: string, orderBy: string): Promise<Record<string, any>[]> {
+  const PAGE = 1000
+  const rows: Record<string, any>[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from(table)
+      .select('*')
+      .eq('user_id', userId)
+      .order(orderBy, { ascending: true })
+      .range(from, from + PAGE - 1)
+    if (error) throw error
+    rows.push(...(data || []))
+    if (!data || data.length < PAGE) break
+  }
+  return rows
+}
+
+// Server row -> local Transaction. Server dates are timestamptz; local code uses 'YYYY-MM-DD'.
+function mapTransactionRow(row: Record<string, any>): Transaction {
+  const t = toCamelCase(row) as unknown as Transaction
+  return {
+    ...t,
+    date: typeof row.date === 'string' ? row.date.slice(0, 10) : t.date,
+    amount: Number(row.amount),
+    latitude: row.latitude == null ? null : Number(row.latitude),
+    longitude: row.longitude == null ? null : Number(row.longitude),
+    cashierId: row.cashier_id ?? null,
+    categoryId: row.category_id ?? null,
+    description: row.description ?? '',
+    merchant: row.merchant ?? '',
+    notes: row.notes ?? '',
+    receiptImage: row.receipt_image ?? null,
+    receiptOcrText: row.receipt_ocr_text ?? null,
+    location: row.location ?? null,
+    createdAt: row.created_at ?? new Date().toISOString(),
+    updatedAt: row.updated_at ?? row.created_at ?? new Date().toISOString(),
+    deletedAt: row.deleted_at ?? null,
+  }
+}
+
 function validateUserId(userId: unknown): asserts userId is string {
   if (!userId || typeof userId !== 'string' || userId.trim() === '') {
     throw new Error('[Sync] Invalid userId: must be a non-empty string')
@@ -67,6 +108,27 @@ export async function syncUserDataFromSupabase(userId: string): Promise<void> {
       const accountsData = accounts.map(toCamelCase) as unknown as Account[]
       await db.accounts.bulkPut(accountsData)
       console.log('[Sync] Synced', accountsData.length, 'accounts')
+    }
+
+    // 2b. Sync Transactions (includes soft-deleted rows so deletes propagate to other devices)
+    const remoteTransactions = await fetchAllRows('transactions', userId, 'created_at')
+    if (remoteTransactions.length > 0) {
+      const ids = remoteTransactions.map(r => r.id as string)
+      const localById = new Map(
+        (await db.transactions.bulkGet(ids))
+          .filter((t): t is Transaction => !!t)
+          .map(t => [t.id, t] as const)
+      )
+      const toPut: Transaction[] = []
+      for (const row of remoteTransactions) {
+        const remote = mapTransactionRow(row)
+        const local = localById.get(remote.id)
+        // Keep local edits that have not reached the server yet (last write wins by updatedAt).
+        if (local && Date.parse(local.updatedAt) > Date.parse(remote.updatedAt)) continue
+        toPut.push(remote)
+      }
+      if (toPut.length > 0) await db.transactions.bulkPut(toPut)
+      console.log('[Sync] Synced', toPut.length, 'of', remoteTransactions.length, 'transactions')
     }
 
     // 3. Sync Categories

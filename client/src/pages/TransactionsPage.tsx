@@ -17,6 +17,8 @@ import { useReceiptOcr } from '../hooks/useReceiptOcr'
 import type { Transaction as TxType, Category } from '../types'
 import { db } from '../db'
 import { pushLocalChangesToSupabase } from '../db/sync'
+import { pushAndReport } from '../db/pushAndReport'
+import { useCameraStream } from '../hooks/useCameraStream'
 import React from 'react'
 
 const ACCOUNT_ICONS: Record<string, any> = {
@@ -181,17 +183,9 @@ export function TransactionsPage() {
 
               // Open camera directly when Receipt button clicked
                             const openCameraDirect = useCallback(async () => {
-                              setCameraOpen(true)
-                              try {
-                                const stream = await navigator.mediaDevices.getUserMedia({ video: true })
-                                if (cameraRef.current) {
-                                  cameraRef.current.srcObject = stream
-                                  setHasStream(true)
-                                }
-                              } catch {
-                                alert('Camera access denied. Try uploading a photo instead.')
-                              }
-                            }, [])
+                                setCameraOpen(true)
+                                await cam.start('environment')
+                              }, [cam.start])
 
               // Receipt OCR
     const ocrCtx = useReceiptOcr()
@@ -199,9 +193,11 @@ export function TransactionsPage() {
   const [ocrResult, setOcrResult] = useState<any>(null)
   const [receiptImage, setReceiptImage] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-    const cameraRef = useRef<HTMLVideoElement>(null)
+    const cam = useCameraStream()
+    const cameraRef = cam.videoRef
+    const hasStream = cam.active
+    const closeCamera = () => { setCameraOpen(false); cam.stop() }
     const [cameraOpen, setCameraOpen] = useState(false)
-    const [hasStream, setHasStream] = useState(false)
 
   const currency = user?.currency || 'IDR'
 
@@ -239,8 +235,7 @@ export function TransactionsPage() {
         return sortDir === 'asc' ? cmp : -cmp
       })
 
-      // Only show latest 3 transactions
-      return result.slice(0, 3)
+      return result
     }, [transactions, filters, sortBy, sortDir])
 
   const hasFilters = filters.type || filters.categoryIds.length > 0 || filters.accountIds.length > 0 ||
@@ -250,10 +245,9 @@ export function TransactionsPage() {
 
   const handleDelete = async (id: string) => {
       if (!confirm('Delete this transaction?')) return
-
-      await db.transactions.update(id, { deletedAt: new Date().toISOString() })
-      // Push to Supabase
-      await pushLocalChangesToSupabase(userId || '')
+      // Soft delete so the deletion also reaches other devices on the next sync.
+      await db.transactions.update(id, { deletedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
+      await pushAndReport(userId)
     }
 
     const addTransaction = async (tx: Partial<TxType> & { accountId: string; type: TxType['type']; amount: number; date: string; cashierId?: string }) => {
@@ -441,6 +435,44 @@ export function TransactionsPage() {
                 }
               }
 
+  // Override the manual form with the voice-parsed data
+  const fillFormFromVoice = () => {
+    const p = voiceCtx.parsed
+    setForm(f => ({
+      ...f,
+      type: p.suggestedType || 'expense',
+      amount: p.amount ? String(p.amount / 100) : '',
+      date: p.date || toISODate(new Date()),
+      categoryId: p.suggestedCategoryId || '',
+      merchant: p.merchant || '',
+      description: p.description || p.merchant || '',
+      location: p.location || '',
+      latitude: p.latitude ?? null,
+      longitude: p.longitude ?? null,
+    }))
+    setShowVoiceDialog(false)
+    voiceCtx.stopListening()
+    setFormOpen(true)
+  }
+
+  // Override the manual form with the receipt-scanned data
+  const fillFormFromReceipt = () => {
+    if (!ocrResult) return
+    setForm(f => ({
+      ...f,
+      type: ocrResult.suggestedType || 'expense',
+      amount: ocrResult.total ? String(ocrResult.total / 100) : '',
+      date: ocrResult.date || toISODate(new Date()),
+      categoryId: ocrResult.suggestedCategoryId || '',
+      merchant: ocrResult.merchant || '',
+      description: ocrResult.merchant || '',
+      receiptImage,
+      receiptOcrText: ocrResult.text ?? null,
+    }))
+    setShowReceiptDialog(false)
+    setFormOpen(true)
+  }
+
   // Receipt OCR handler
   const handleImageUpload = async (file: File) => {
     // Compress image
@@ -473,15 +505,15 @@ export function TransactionsPage() {
   }
 
   const handleCameraCapture = async () => {
-    if (!cameraRef.current) return
+    const video = cam.getVideoEl()
+    if (!video || !video.videoWidth) return
     const canvas = document.createElement('canvas')
-    canvas.width = cameraRef.current.videoWidth
-    canvas.height = cameraRef.current.videoHeight
-    const ctx = canvas.getContext('2d')!
-    ctx.drawImage(cameraRef.current, 0, 0)
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    canvas.getContext('2d')?.drawImage(video, 0, 0)
     const imageData = canvas.toDataURL('image/jpeg', 0.8)
+    closeCamera() // release the camera as soon as the photo is taken
     setReceiptImage(imageData)
-    setCameraOpen(false)
 
     const result = await ocrCtx.recognizeReceipt(imageData)
     setOcrResult(result)
@@ -671,7 +703,7 @@ export function TransactionsPage() {
             return (
               <Card
                 key={tx.id}
-                className="hover:bg-card/80 transition-colors py-3"
+                className="hover:bg-card/80 transition-colors py-3 group"
                 hover
                 onClick={() => resetForm(tx)}
               >
@@ -723,7 +755,7 @@ export function TransactionsPage() {
                       {isIncome ? '+' : isExpense ? '-' : ''}
                       {formatCurrency(tx.amount, currency)}
                     </span>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex gap-1">
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={e => { e.stopPropagation(); resetForm(tx) }}>
                         <Edit3 className="w-3.5 h-3.5" />
                       </Button>
@@ -1020,6 +1052,9 @@ export function TransactionsPage() {
                 >
                   {voiceSaving ? 'Saving...' : 'Save Transaction'}
                 </Button>
+                <Button variant="outline" size="sm" onClick={fillFormFromVoice} disabled={!voiceCtx.parsed.amount}>
+                  <Edit3 className="w-4 h-4 mr-1" /> Edit in Form
+                </Button>
                 {voiceCtx.parsed.amount && (
                   <Button variant="ghost" size="sm" onClick={() => voiceCtx.clearTranscript()}>
                     Clear
@@ -1154,8 +1189,7 @@ export function TransactionsPage() {
                                   size="sm"
                                   onClick={() => {
                                     setShowReceiptDialog(false)
-                                    // Form is already open, user can edit there
-                                    setFormOpen(true)
+                                    fillFormFromReceipt()
                                   }}
                                 >
                                   Edit in Form
@@ -1168,11 +1202,11 @@ export function TransactionsPage() {
       </Dialog>
 
       {/* Camera dialog */}
-                  <Dialog open={cameraOpen} onClose={() => { setCameraOpen(false); setHasStream(false); if (cameraRef.current && cameraRef.current.srcObject instanceof MediaStream) cameraRef.current.srcObject.getTracks()[0]?.stop() }}>
+                  <Dialog open={cameraOpen} onClose={() => { closeCamera() }}>
                     <div className="p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-lg font-semibold">Take Photo</h3>
-                        <Button variant="ghost" size="icon" onClick={() => { setCameraOpen(false); setHasStream(false); if (cameraRef.current && cameraRef.current.srcObject instanceof MediaStream) cameraRef.current.srcObject.getTracks()[0]?.stop() }}>
+                        <Button variant="ghost" size="icon" onClick={() => { closeCamera() }}>
                           <X className="w-5 h-5" />
                         </Button>
                       </div>
@@ -1187,7 +1221,7 @@ export function TransactionsPage() {
                                       <div className="w-10 h-10 rounded-full border-2 border-primary" />
                                     </button>
                                     <button
-                                      onClick={() => { setCameraOpen(false); setHasStream(false); if (cameraRef.current && cameraRef.current.srcObject instanceof MediaStream) cameraRef.current.srcObject.getTracks()[0]?.stop() }}
+                                      onClick={() => { closeCamera() }}
                                       className="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center"
                                     >
                                       <X className="w-4 h-4" />
@@ -1195,17 +1229,7 @@ export function TransactionsPage() {
                                   </div>
                                 ) : (
                   <div className="space-y-4">
-                    <Button onClick={async () => {
-                      try {
-                        const stream = await navigator.mediaDevices.getUserMedia({ video: true })
-                        if (cameraRef.current) {
-                          cameraRef.current.srcObject = stream
-                          setHasStream(true)
-                        }
-                      } catch {
-                        alert('Camera access denied. Try uploading a photo instead.')
-                      }
-                    }}>
+                    <Button onClick={() => openCameraDirect()}>
                       <Camera className="w-4 h-4 mr-2" /> Open Camera
                     </Button>
                     <p className="text-xs text-muted-foreground">
