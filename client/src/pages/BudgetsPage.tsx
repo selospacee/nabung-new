@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { useCurrentUser, useBudgets, useCategories, useTransactions, useAccounts, useAccountBalances } from '../db/hooks'
+import { useCurrentUser, useAllBudgets, useCategories, useTransactions, useAccounts, useAccountBalances } from '../db/hooks'
 import { db } from '../db'
 import { pushLocalChangesToSupabase } from '../db/sync'
 import { v4 as uuid } from 'uuid'
@@ -48,7 +48,7 @@ export function BudgetsPage() {
   const { user, userId } = useCurrentUser()
   const categories = useCategories(userId)
   const allTransactions = useTransactions(userId)
-  const budgets = useBudgets(userId)
+  const budgets = useAllBudgets(userId)
   const accounts = useAccounts(userId)
   const balances = useAccountBalances(userId)
 
