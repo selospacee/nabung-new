@@ -300,11 +300,22 @@ export async function pushLocalChangesToSupabase(userId: string): Promise<PushRe
       const snakeBudget = toSnakeCase(budget as unknown as Record<string, unknown>)
       snakeBudget.user_id = userId
       const cleanPayload = stripToAllowedKeys(snakeBudget, 'budgets')
-      const { error } = await supabase.from('budgets').upsert(cleanPayload)
+      // One budget per (user, category, month). If the server already has that row under another id
+      // (e.g. created on another device), update it and adopt its id locally instead of failing with 409.
+      const { data: saved, error } = await supabase
+        .from('budgets')
+        .upsert(cleanPayload, { onConflict: 'user_id,category_id,year_month' })
+        .select('id')
+        .single()
       if (error) {
         const msg = formatSupabaseError(error)
         console.error('[Sync] Push budget error:', msg)
         errors.push({ table: 'budgets', message: msg })
+        continue
+      }
+      if (saved?.id && saved.id !== budget.id) {
+        await db.budgets.delete(budget.id)
+        await db.budgets.put({ ...budget, id: saved.id as string })
       }
     }
 
