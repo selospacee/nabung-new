@@ -137,6 +137,84 @@ export const LIVE_SCHEMA: LiveSchema = {
       },
       checks: { role: ['cashier', 'admin', 'manager'] },
     },
+    // PENDING APPLY: tabel Nabung Bareng di bawah ini BELUM ada di DB live.
+    // Sumber: supabase/migrations/20261111105700_shared_savings.sql. Hapus komentar ini dan
+    // regenerasi snapshot (docs/testing.md) setelah migration diapply.
+    groups: {
+      columns: {
+        id: { notNull: true, hasDefault: true },
+        name: { notNull: true, hasDefault: false },
+        type: { notNull: true, hasDefault: false },
+        currency: { notNull: true, hasDefault: true },
+        invite_code: { notNull: true, hasDefault: false },
+        created_by: { notNull: false, hasDefault: false },
+        created_at: { notNull: true, hasDefault: true },
+        updated_at: { notNull: true, hasDefault: true },
+      },
+      checks: { type: ['couple', 'circle'] },
+    },
+    group_members: {
+      columns: {
+        group_id: { notNull: true, hasDefault: false },
+        user_id: { notNull: true, hasDefault: false },
+        role: { notNull: true, hasDefault: false },
+        joined_at: { notNull: true, hasDefault: true },
+        left_at: { notNull: false, hasDefault: false },
+      },
+      checks: { role: ['owner', 'member'] },
+    },
+    group_goals: {
+      columns: {
+        id: { notNull: true, hasDefault: true },
+        group_id: { notNull: true, hasDefault: false },
+        title: { notNull: true, hasDefault: false },
+        target_amount: { notNull: true, hasDefault: false },
+        deadline: { notNull: false, hasDefault: false },
+        status: { notNull: true, hasDefault: true },
+        created_by: { notNull: false, hasDefault: false },
+        created_at: { notNull: true, hasDefault: true },
+        updated_at: { notNull: true, hasDefault: true },
+      },
+      checks: { status: ['active', 'cancelled'] },
+    },
+    goal_participants: {
+      columns: {
+        goal_id: { notNull: true, hasDefault: false },
+        user_id: { notNull: true, hasDefault: false },
+      },
+      checks: {},
+    },
+    contributions: {
+      columns: {
+        id: { notNull: true, hasDefault: true },
+        goal_id: { notNull: true, hasDefault: false },
+        user_id: { notNull: true, hasDefault: false },
+        amount: { notNull: true, hasDefault: false },
+        contributed_at: { notNull: true, hasDefault: true },
+        note: { notNull: false, hasDefault: false },
+        created_at: { notNull: true, hasDefault: true },
+        updated_at: { notNull: true, hasDefault: true },
+        deleted_at: { notNull: false, hasDefault: false },
+      },
+      checks: {},
+    },
+    group_activity: {
+      columns: {
+        id: { notNull: true, hasDefault: true },
+        group_id: { notNull: true, hasDefault: false },
+        actor_id: { notNull: false, hasDefault: false },
+        action: { notNull: true, hasDefault: false },
+        ref: { notNull: true, hasDefault: true },
+        created_at: { notNull: true, hasDefault: true },
+      },
+      checks: {
+        action: [
+          'member_joined', 'member_left', 'ownership_transferred', 'invite_regenerated',
+          'goal_created', 'goal_updated', 'goal_cancelled',
+          'contribution_added', 'contribution_updated', 'contribution_deleted',
+        ],
+      },
+    },
     profiles: {
       columns: {
         id: { notNull: true, hasDefault: false },

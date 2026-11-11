@@ -227,3 +227,83 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- =====================================================================
+-- Nabung Bareng (shared savings). Tabel saja; policy RLS, RPC, view,
+-- dan trigger aktivitas ada di supabase/migrations/20261111105700_shared_savings.sql.
+-- STATUS: pending apply.
+-- =====================================================================
+
+CREATE TABLE groups (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  name TEXT NOT NULL CHECK (char_length(name) BETWEEN 1 AND 60),
+  type TEXT NOT NULL CHECK (type IN ('couple', 'circle')),
+  currency TEXT NOT NULL DEFAULT 'IDR' CHECK (char_length(currency) = 3),
+  invite_code TEXT NOT NULL UNIQUE CHECK (invite_code ~ '^[A-F0-9]{8}$'),
+  created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_groups_created_by ON groups(created_by);
+
+CREATE TABLE group_members (
+  group_id UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('owner', 'member')),
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  left_at TIMESTAMPTZ,
+  PRIMARY KEY (group_id, user_id)
+);
+CREATE UNIQUE INDEX idx_group_members_one_active_owner
+  ON group_members(group_id) WHERE role = 'owner' AND left_at IS NULL;
+CREATE INDEX idx_group_members_user ON group_members(user_id);
+
+CREATE TABLE group_goals (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  group_id UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  title TEXT NOT NULL CHECK (char_length(title) BETWEEN 1 AND 100),
+  target_amount BIGINT NOT NULL CHECK (target_amount > 0 AND target_amount <= 1000000000000000),
+  deadline DATE,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'cancelled')),
+  created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_group_goals_group ON group_goals(group_id);
+CREATE INDEX idx_group_goals_created_by ON group_goals(created_by);
+
+CREATE TABLE goal_participants (
+  goal_id UUID NOT NULL REFERENCES group_goals(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  PRIMARY KEY (goal_id, user_id)
+);
+CREATE INDEX idx_goal_participants_user ON goal_participants(user_id);
+
+CREATE TABLE contributions (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  goal_id UUID NOT NULL REFERENCES group_goals(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  amount BIGINT NOT NULL CHECK (amount > 0 AND amount <= 1000000000000000),
+  contributed_at DATE NOT NULL DEFAULT CURRENT_DATE,
+  note TEXT CHECK (char_length(note) <= 280),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  deleted_at TIMESTAMPTZ
+);
+CREATE INDEX idx_contributions_goal ON contributions(goal_id);
+CREATE INDEX idx_contributions_user ON contributions(user_id);
+
+CREATE TABLE group_activity (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  group_id UUID NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  actor_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  action TEXT NOT NULL CHECK (action IN ('member_joined', 'member_left', 'ownership_transferred', 'invite_regenerated', 'goal_created', 'goal_updated', 'goal_cancelled', 'contribution_added', 'contribution_updated', 'contribution_deleted')),
+  ref JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_group_activity_group_time ON group_activity(group_id, created_at DESC);
+CREATE INDEX idx_group_activity_actor ON group_activity(actor_id);
+
+CREATE TRIGGER update_groups_updated_at BEFORE UPDATE ON groups FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_group_goals_updated_at BEFORE UPDATE ON group_goals FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_contributions_updated_at BEFORE UPDATE ON contributions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
