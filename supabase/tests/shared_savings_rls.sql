@@ -1,5 +1,6 @@
 -- Skenario RLS & RPC Nabung Bareng.
--- Jalankan SETELAH supabase/migrations/20261111114000_shared_savings.sql, sebagai superuser (postgres),
+-- Jalankan SETELAH supabase/migrations/20261111114000_shared_savings.sql, 20261111114419_shared_savings_revoke_trigger_execute.sql,
+-- dan 20261112065000_shared_savings_goal_management.sql, sebagai superuser (postgres),
 -- di SQL editor atau: psql -v ON_ERROR_STOP=1 -f supabase/tests/shared_savings_rls.sql
 --
 -- Seluruh skrip berada dalam SATU transaksi dan diakhiri ROLLBACK, jadi tidak ada data yang tertinggal.
@@ -291,6 +292,91 @@ SELECT rls_test.expect_error('B yang sudah keluar tidak bisa menulis kontribusi'
   '%row-level security%');
 SELECT rls_test.expect_rows('B yang sudah keluar tidak melihat progres',
   $q$SELECT * FROM goal_progress$q$, 0);
+
+-- ---------------------------------------------------------------------
+-- 9. Hak mengelola goal (keputusan produk 2026-11-12)
+--    couple: kedua anggota setara.  circle: hanya pembuat goal atau owner.
+-- ---------------------------------------------------------------------
+SELECT rls_test.as_admin();
+
+INSERT INTO auth.users (id, email) VALUES
+  ('aaaaaaaa-0000-0000-0000-000000000004', 'p1@test.local'),
+  ('aaaaaaaa-0000-0000-0000-000000000005', 'p2@test.local');
+
+-- circle c1: A = owner, B = pembuat goal (anggota biasa), C = anggota biasa
+-- couple c2: P1 = pembuat & owner, P2 = pasangan non-pembuat
+INSERT INTO groups (id, name, type, currency, invite_code, created_by) VALUES
+  ('bbbbbbbb-0000-0000-0000-0000000000c1', 'Sirkel Goal', 'circle', 'IDR', 'CCCC0001', 'aaaaaaaa-0000-0000-0000-000000000001'),
+  ('bbbbbbbb-0000-0000-0000-0000000000c2', 'Pasangan Goal', 'couple', 'IDR', 'CCCC0002', 'aaaaaaaa-0000-0000-0000-000000000004');
+INSERT INTO group_members (group_id, user_id, role) VALUES
+  ('bbbbbbbb-0000-0000-0000-0000000000c1', 'aaaaaaaa-0000-0000-0000-000000000001', 'owner'),
+  ('bbbbbbbb-0000-0000-0000-0000000000c1', 'aaaaaaaa-0000-0000-0000-000000000002', 'member'),
+  ('bbbbbbbb-0000-0000-0000-0000000000c1', 'aaaaaaaa-0000-0000-0000-000000000003', 'member'),
+  ('bbbbbbbb-0000-0000-0000-0000000000c2', 'aaaaaaaa-0000-0000-0000-000000000004', 'owner'),
+  ('bbbbbbbb-0000-0000-0000-0000000000c2', 'aaaaaaaa-0000-0000-0000-000000000005', 'member');
+INSERT INTO group_goals (id, group_id, title, target_amount, created_by) VALUES
+  ('cccccccc-0000-0000-0000-0000000000c1', 'bbbbbbbb-0000-0000-0000-0000000000c1', 'Goal Sirkel', 1000000000, 'aaaaaaaa-0000-0000-0000-000000000002'),
+  ('cccccccc-0000-0000-0000-0000000000c2', 'bbbbbbbb-0000-0000-0000-0000000000c2', 'Goal Pasangan', 1000000000, 'aaaaaaaa-0000-0000-0000-000000000004');
+INSERT INTO goal_participants (goal_id, user_id) VALUES
+  ('cccccccc-0000-0000-0000-0000000000c1', 'aaaaaaaa-0000-0000-0000-000000000002'),
+  ('cccccccc-0000-0000-0000-0000000000c1', 'aaaaaaaa-0000-0000-0000-000000000003'),
+  ('cccccccc-0000-0000-0000-0000000000c2', 'aaaaaaaa-0000-0000-0000-000000000004'),
+  ('cccccccc-0000-0000-0000-0000000000c2', 'aaaaaaaa-0000-0000-0000-000000000005');
+
+SELECT rls_test.expect_rows('helper can_manage_goal: hanya authenticated yang boleh EXECUTE',
+  $q$SELECT 1 WHERE has_function_privilege('authenticated', 'public.can_manage_goal(uuid)', 'EXECUTE')
+     AND NOT has_function_privilege('anon', 'public.can_manage_goal(uuid)', 'EXECUTE')$q$, 1);
+
+-- C: anggota biasa di circle -> ditolak
+SELECT rls_test.as_role('authenticated', 'aaaaaaaa-0000-0000-0000-000000000003');
+SELECT rls_test.expect_affected('circle: anggota biasa tidak bisa mengubah target',
+  $q$UPDATE group_goals SET target_amount = 1 WHERE id = 'cccccccc-0000-0000-0000-0000000000c1'$q$, 0);
+SELECT rls_test.expect_affected('circle: anggota biasa tidak bisa membatalkan goal',
+  $q$UPDATE group_goals SET status = 'cancelled' WHERE id = 'cccccccc-0000-0000-0000-0000000000c1'$q$, 0);
+SELECT rls_test.expect_affected('circle: anggota biasa tidak bisa menghapus peserta',
+  $q$DELETE FROM goal_participants WHERE goal_id = 'cccccccc-0000-0000-0000-0000000000c1'
+     AND user_id = 'aaaaaaaa-0000-0000-0000-000000000002'$q$, 0);
+SELECT rls_test.expect_error('circle: anggota biasa tidak bisa menambah peserta',
+  $q$INSERT INTO goal_participants (goal_id, user_id) VALUES
+     ('cccccccc-0000-0000-0000-0000000000c1', 'aaaaaaaa-0000-0000-0000-000000000001')$q$,
+  '%row-level security%');
+SELECT rls_test.expect_rows('circle: goal tetap utuh setelah percobaan ditolak',
+  $q$SELECT 1 FROM group_goals WHERE id = 'cccccccc-0000-0000-0000-0000000000c1'
+     AND target_amount = 1000000000 AND status = 'active'$q$, 1);
+
+-- B: pembuat goal (anggota biasa) -> diizinkan
+SELECT rls_test.as_role('authenticated', 'aaaaaaaa-0000-0000-0000-000000000002');
+SELECT rls_test.expect_affected('circle: pembuat goal boleh mengubah target',
+  $q$UPDATE group_goals SET target_amount = 900000000 WHERE id = 'cccccccc-0000-0000-0000-0000000000c1'$q$, 1);
+SELECT rls_test.expect_affected('circle: pembuat goal boleh menambah peserta',
+  $q$INSERT INTO goal_participants (goal_id, user_id) VALUES
+     ('cccccccc-0000-0000-0000-0000000000c1', 'aaaaaaaa-0000-0000-0000-000000000001')$q$, 1);
+SELECT rls_test.expect_affected('circle: pembuat goal boleh menghapus peserta',
+  $q$DELETE FROM goal_participants WHERE goal_id = 'cccccccc-0000-0000-0000-0000000000c1'
+     AND user_id = 'aaaaaaaa-0000-0000-0000-000000000001'$q$, 1);
+
+-- A: owner (bukan pembuat) -> diizinkan
+SELECT rls_test.as_role('authenticated', 'aaaaaaaa-0000-0000-0000-000000000001');
+SELECT rls_test.expect_affected('circle: owner boleh mengubah target goal milik anggota lain',
+  $q$UPDATE group_goals SET target_amount = 800000000 WHERE id = 'cccccccc-0000-0000-0000-0000000000c1'$q$, 1);
+SELECT rls_test.expect_affected('circle: owner boleh menghapus peserta',
+  $q$DELETE FROM goal_participants WHERE goal_id = 'cccccccc-0000-0000-0000-0000000000c1'
+     AND user_id = 'aaaaaaaa-0000-0000-0000-000000000003'$q$, 1);
+SELECT rls_test.expect_affected('circle: owner boleh membatalkan goal',
+  $q$UPDATE group_goals SET status = 'cancelled' WHERE id = 'cccccccc-0000-0000-0000-0000000000c1'$q$, 1);
+
+-- P2: pasangan non-pembuat di couple -> diizinkan
+SELECT rls_test.as_role('authenticated', 'aaaaaaaa-0000-0000-0000-000000000005');
+SELECT rls_test.expect_affected('couple: pasangan non-pembuat boleh mengubah target',
+  $q$UPDATE group_goals SET target_amount = 900000000 WHERE id = 'cccccccc-0000-0000-0000-0000000000c2'$q$, 1);
+SELECT rls_test.expect_affected('couple: pasangan non-pembuat boleh menghapus peserta',
+  $q$DELETE FROM goal_participants WHERE goal_id = 'cccccccc-0000-0000-0000-0000000000c2'
+     AND user_id = 'aaaaaaaa-0000-0000-0000-000000000004'$q$, 1);
+SELECT rls_test.expect_affected('couple: pasangan non-pembuat boleh menambah peserta',
+  $q$INSERT INTO goal_participants (goal_id, user_id) VALUES
+     ('cccccccc-0000-0000-0000-0000000000c2', 'aaaaaaaa-0000-0000-0000-000000000004')$q$, 1);
+SELECT rls_test.expect_affected('couple: pasangan non-pembuat boleh membatalkan goal',
+  $q$UPDATE group_goals SET status = 'cancelled' WHERE id = 'cccccccc-0000-0000-0000-0000000000c2'$q$, 1);
 
 SELECT rls_test.as_admin();
 SELECT 'SEMUA SKENARIO RLS LULUS (transaksi di-ROLLBACK)' AS hasil;

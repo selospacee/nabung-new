@@ -92,14 +92,17 @@ Helper (`SECURITY DEFINER`, `STABLE`, dipakai policy agar tidak rekursif):
 | `is_group_owner(gid)` | Anggota aktif dengan `role = owner` |
 | `goal_group_id(goal_id)` | Grup milik goal |
 | `can_contribute(goal_id)` | User login, anggota aktif, peserta goal, dan goal `active` |
+| `can_manage_goal(goal_id)` | **Baru (migration 20261112065000, belum diapply).** Anggota aktif grup goal tsb DAN (grup `couple` ATAU pembuat goal ATAU owner aktif). Hanya `authenticated` yang boleh EXECUTE. |
 | `new_invite_code()` | Kode 8 hex unik |
+
+Pengelolaan goal dan peserta memakai `can_manage_goal` (keputusan 2026-11-12, lihat bagian 6 item 9). Kolom di tabel berikut yang bertanda *pengelola* hanya boleh diubah oleh `can_manage_goal`.
 
 | Tabel | SELECT | INSERT | UPDATE | DELETE |
 |---|---|---|---|---|
 | `groups` | anggota | — (RPC) | owner, kolom `name` saja | — |
 | `group_members` | anggota aktif | — (RPC) | — (RPC) | — |
-| `group_goals` | anggota | anggota, `created_by = self` | anggota; kolom `title, target_amount, deadline, status` | — |
-| `goal_participants` | anggota | anggota, dan user adalah anggota aktif | — | anggota |
+| `group_goals` | anggota | anggota, `created_by = self` (tetap, siapa pun anggota boleh membuat goal) | *pengelola*; kolom `title, target_amount, deadline, status` | — |
+| `goal_participants` | anggota | *pengelola*, dan user adalah anggota aktif | — | *pengelola* |
 | `contributions` | anggota (termasuk soft-deleted, untuk audit) | `user_id = self` **dan** `can_contribute` | `user_id = self` **dan** `can_contribute`; kolom `amount, contributed_at, note, deleted_at` | — (hanya soft delete) |
 | `group_activity` | anggota | — (trigger) | — | — |
 
@@ -144,7 +147,13 @@ Ini deviasi kecil atau pengisian celah yang tidak dijawab panduan. Tinjau sebelu
 5. **Grup tanpa owner aktif**: yang bergabung berikutnya menjadi owner.
 6. **`groups.created_by` nullable** (`ON DELETE SET NULL`), supaya grup tidak hilang saat pembuatnya menghapus akun.
 7. **`groups.currency` tidak bisa diubah** lewat client (kolom grant hanya `name`).
-8. **`goal_participants` boleh dihapus anggota mana pun**. Kontribusi lama tetap ada.
+8. **`goal_participants` ditambah/dihapus hanya oleh pengelola goal** (lihat item 9). Sebelumnya: anggota mana pun. Kontribusi lama tetap ada.
+9. **Keputusan produk, 2026-11-12 (dari Yang Mulia): couple setara, circle hanya pembuat goal atau owner.**
+   - *Pengelola goal* = anggota aktif yang (grup `couple`) ATAU (pembuat goal) ATAU (owner aktif grup).
+   - Berlaku untuk: mengubah goal (target, judul, deadline, status/pembatalan) serta menambah dan menghapus peserta.
+   - Tidak berlaku untuk: membuat goal (tetap anggota mana pun) dan setor kontribusi (tidak berubah).
+   - Anggota biasa di circle tetap bisa membuat goal dan setor, tetapi tidak bisa mengelola goal orang lain.
+   - Diterapkan lewat `supabase/migrations/20261112065000_shared_savings_goal_management.sql`. **Belum diapply** ke live.
 
 ---
 
