@@ -1,6 +1,6 @@
 -- Skenario RLS & RPC Nabung Bareng.
 -- Jalankan SETELAH supabase/migrations/20261111114000_shared_savings.sql, 20261111114419_shared_savings_revoke_trigger_execute.sql,
--- dan 20261112065000_shared_savings_goal_management.sql, sebagai superuser (postgres),
+-- dan 20261112071835_shared_savings_goal_management.sql, sebagai superuser (postgres),
 -- di SQL editor atau: psql -v ON_ERROR_STOP=1 -f supabase/tests/shared_savings_rls.sql
 --
 -- Seluruh skrip berada dalam SATU transaksi dan diakhiri ROLLBACK, jadi tidak ada data yang tertinggal.

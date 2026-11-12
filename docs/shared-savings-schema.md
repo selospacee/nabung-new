@@ -92,7 +92,7 @@ Helper (`SECURITY DEFINER`, `STABLE`, dipakai policy agar tidak rekursif):
 | `is_group_owner(gid)` | Anggota aktif dengan `role = owner` |
 | `goal_group_id(goal_id)` | Grup milik goal |
 | `can_contribute(goal_id)` | User login, anggota aktif, peserta goal, dan goal `active` |
-| `can_manage_goal(goal_id)` | **Baru (migration 20261112065000, belum diapply).** Anggota aktif grup goal tsb DAN (grup `couple` ATAU pembuat goal ATAU owner aktif). Hanya `authenticated` yang boleh EXECUTE. |
+| `can_manage_goal(goal_id)` | **Baru (migration 20261112071835, diapply 2026-11-12).** Anggota aktif grup goal tsb DAN (grup `couple` ATAU pembuat goal ATAU owner aktif). Hanya `authenticated` yang boleh EXECUTE. |
 | `new_invite_code()` | Kode 8 hex unik |
 
 Pengelolaan goal dan peserta memakai `can_manage_goal` (keputusan 2026-11-12, lihat bagian 6 item 9). Kolom di tabel berikut yang bertanda *pengelola* hanya boleh diubah oleh `can_manage_goal`.
@@ -153,7 +153,7 @@ Ini deviasi kecil atau pengisian celah yang tidak dijawab panduan. Tinjau sebelu
    - Berlaku untuk: mengubah goal (target, judul, deadline, status/pembatalan) serta menambah dan menghapus peserta.
    - Tidak berlaku untuk: membuat goal (tetap anggota mana pun) dan setor kontribusi (tidak berubah).
    - Anggota biasa di circle tetap bisa membuat goal dan setor, tetapi tidak bisa mengelola goal orang lain.
-   - Diterapkan lewat `supabase/migrations/20261112065000_shared_savings_goal_management.sql`. **Belum diapply** ke live.
+   - Diterapkan lewat `supabase/migrations/20261112071835_shared_savings_goal_management.sql`. **Sudah diapply** ke live pada 2026-11-12 (versi 20261112071835).
 
 ---
 

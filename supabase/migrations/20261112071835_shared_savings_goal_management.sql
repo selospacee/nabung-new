@@ -5,7 +5,7 @@
 -- Tidak berlaku untuk: membuat goal (tetap anggota mana pun) dan setor kontribusi (tidak berubah).
 --
 -- Migration lanjutan dari 20261111114000_shared_savings.sql (+ 20261111114419 revoke trigger).
--- STATUS: BELUM DIAPPLY ke project lyhemujxjphuyohyckvw. Menunggu persetujuan eksplisit.
+-- STATUS: SUDAH DIAPPLY ke project lyhemujxjphuyohyckvw (2026-11-12), versi 20261112071835.
 
 -- =====================================================================
 -- 1. Helper
