@@ -378,6 +378,63 @@ SELECT rls_test.expect_affected('couple: pasangan non-pembuat boleh menambah pes
 SELECT rls_test.expect_affected('couple: pasangan non-pembuat boleh membatalkan goal',
   $q$UPDATE group_goals SET status = 'cancelled' WHERE id = 'cccccccc-0000-0000-0000-0000000000c2'$q$, 1);
 
+-- ---------------------------------------------------------------------
+-- 10. Anggota yang sudah keluar (left_at terisi): tidak bisa baca, setor, atau kelola
+--     Dia tetap terdaftar sebagai peserta goal aktif, supaya yang diuji adalah keanggotaan aktif.
+-- ---------------------------------------------------------------------
+SELECT rls_test.as_admin();
+
+INSERT INTO auth.users (id, email) VALUES
+  ('aaaaaaaa-0000-0000-0000-000000000006', 'ex@test.local');
+INSERT INTO group_members (group_id, user_id, role, left_at) VALUES
+  ('bbbbbbbb-0000-0000-0000-0000000000c1', 'aaaaaaaa-0000-0000-0000-000000000006', 'member', NOW());
+INSERT INTO group_goals (id, group_id, title, target_amount, created_by) VALUES
+  ('cccccccc-0000-0000-0000-0000000000c3', 'bbbbbbbb-0000-0000-0000-0000000000c1', 'Goal Keluar', 1000000000, 'aaaaaaaa-0000-0000-0000-000000000002');
+INSERT INTO goal_participants (goal_id, user_id) VALUES
+  ('cccccccc-0000-0000-0000-0000000000c3', 'aaaaaaaa-0000-0000-0000-000000000002'),
+  ('cccccccc-0000-0000-0000-0000000000c3', 'aaaaaaaa-0000-0000-0000-000000000006');
+INSERT INTO contributions (goal_id, user_id, amount) VALUES
+  ('cccccccc-0000-0000-0000-0000000000c3', 'aaaaaaaa-0000-0000-0000-000000000002', 300000000);
+
+SELECT rls_test.as_role('authenticated', 'aaaaaaaa-0000-0000-0000-000000000006');
+SELECT rls_test.expect_rows('mantan anggota tidak melihat grup',
+  $q$SELECT * FROM groups WHERE id = 'bbbbbbbb-0000-0000-0000-0000000000c1'$q$, 0);
+SELECT rls_test.expect_rows('mantan anggota tidak melihat anggota grup',
+  $q$SELECT * FROM group_members WHERE group_id = 'bbbbbbbb-0000-0000-0000-0000000000c1'$q$, 0);
+SELECT rls_test.expect_rows('mantan anggota tidak melihat goal',
+  $q$SELECT * FROM group_goals WHERE id = 'cccccccc-0000-0000-0000-0000000000c3'$q$, 0);
+SELECT rls_test.expect_rows('mantan anggota tidak melihat kontribusi',
+  $q$SELECT * FROM contributions WHERE goal_id = 'cccccccc-0000-0000-0000-0000000000c3'$q$, 0);
+SELECT rls_test.expect_rows('mantan anggota tidak melihat progres',
+  $q$SELECT * FROM goal_progress WHERE goal_id = 'cccccccc-0000-0000-0000-0000000000c3'$q$, 0);
+SELECT rls_test.expect_error('mantan anggota tidak bisa membaca nama anggota',
+  $q$SELECT * FROM group_member_names('bbbbbbbb-0000-0000-0000-0000000000c1')$q$, '%NOT_MEMBER%');
+SELECT rls_test.expect_error('mantan anggota ditolak setor meski tercatat sebagai peserta',
+  $q$INSERT INTO contributions (goal_id, user_id, amount) VALUES
+     ('cccccccc-0000-0000-0000-0000000000c3', 'aaaaaaaa-0000-0000-0000-000000000006', 100000000)$q$,
+  '%row-level security%');
+SELECT rls_test.expect_error('mantan anggota tidak bisa membuat goal',
+  $q$INSERT INTO group_goals (group_id, title, target_amount, created_by) VALUES
+     ('bbbbbbbb-0000-0000-0000-0000000000c1', 'Goal Liar', 100000000, 'aaaaaaaa-0000-0000-0000-000000000006')$q$,
+  '%row-level security%');
+SELECT rls_test.expect_affected('mantan anggota tidak bisa mengubah target',
+  $q$UPDATE group_goals SET target_amount = 1 WHERE id = 'cccccccc-0000-0000-0000-0000000000c3'$q$, 0);
+SELECT rls_test.expect_affected('mantan anggota tidak bisa membatalkan goal',
+  $q$UPDATE group_goals SET status = 'cancelled' WHERE id = 'cccccccc-0000-0000-0000-0000000000c3'$q$, 0);
+SELECT rls_test.expect_affected('mantan anggota tidak bisa menghapus peserta',
+  $q$DELETE FROM goal_participants WHERE goal_id = 'cccccccc-0000-0000-0000-0000000000c3'
+     AND user_id = 'aaaaaaaa-0000-0000-0000-000000000002'$q$, 0);
+SELECT rls_test.expect_error('mantan anggota tidak bisa menambah peserta',
+  $q$INSERT INTO goal_participants (goal_id, user_id) VALUES
+     ('cccccccc-0000-0000-0000-0000000000c3', 'aaaaaaaa-0000-0000-0000-000000000006')$q$,
+  '%row-level security%');
+
+-- Goal tidak berubah oleh percobaan di atas (dicek dari sisi anggota aktif: B)
+SELECT rls_test.as_role('authenticated', 'aaaaaaaa-0000-0000-0000-000000000002');
+SELECT rls_test.expect_rows('goal tetap utuh setelah percobaan mantan anggota',
+  $q$SELECT 1 FROM group_goals WHERE id = 'cccccccc-0000-0000-0000-0000000000c3'
+     AND target_amount = 1000000000 AND status = 'active'$q$, 1);
+
 SELECT rls_test.as_admin();
 SELECT 'SEMUA SKENARIO RLS LULUS (transaksi di-ROLLBACK)' AS hasil;
 

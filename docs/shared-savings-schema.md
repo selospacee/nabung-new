@@ -1,6 +1,6 @@
 # Nabung Bareng — Skema, RLS & RPC (kontrak Fase 0)
 
-> **Status: SUDAH DIAPPLY** ke project Supabase `lyhemujxjphuyohyckvw` (Nabung) pada 2026-11-11, dengan dua migration: `shared_savings` dan `shared_savings_revoke_trigger_execute` (cabut EXECUTE trigger dari anon/authenticated, hasil temuan advisor).
+> **Status: SUDAH DIAPPLY** ke project Supabase `lyhemujxjphuyohyckvw` (Nabung): migration `shared_savings` dan `shared_savings_revoke_trigger_execute` (2026-11-11), serta `shared_savings_goal_management` (2026-11-12). Fase 0 selesai di live.
 
 File terkait:
 
@@ -8,7 +8,8 @@ File terkait:
 |---|---|
 | `supabase/migrations/20261111114000_shared_savings.sql` | Migration 1 (`shared_savings`): tabel, index, RLS, grant, helper, view, trigger, RPC |
 | `supabase/migrations/20261111114419_shared_savings_revoke_trigger_execute.sql` | Migration 2 (`shared_savings_revoke_trigger_execute`): cabut EXECUTE fungsi trigger dari `PUBLIC`/`anon`/`authenticated` |
-| `supabase/tests/shared_savings_rls.sql` | 46 pemeriksaan RLS & RPC, dalam satu transaksi yang di-ROLLBACK |
+| `supabase/migrations/20261112071835_shared_savings_goal_management.sql` | Migration 3 (`shared_savings_goal_management`): helper `can_manage_goal`, policy pengelolaan goal dan peserta (keputusan 2026-11-12) |
+| `supabase/tests/shared_savings_rls.sql` | 75 pemeriksaan RLS & RPC, dalam satu transaksi yang di-ROLLBACK |
 | `supabase-schema.sql` | Definisi 6 tabel (+ trigger `updated_at`), mengikuti format parser drift-test |
 | `client/src/db/__fixtures__/live-schema.ts` | Snapshot live (base tables), diregenerasi 2026-11-11 |
 
@@ -161,17 +162,23 @@ Ini deviasi kecil atau pengisian celah yang tidak dijawab panduan. Tinjau sebelu
 
 **Di live** (project Nabung, PostgreSQL 17.11):
 
-- **Dry run sebelum apply:** migration dan `supabase/tests/shared_savings_rls.sql` dijalankan dalam satu transaksi yang di-`ROLLBACK`. Hasil: **46 pemeriksaan lulus** (`SEMUA SKENARIO RLS LULUS`). Setelah itu dicek: tidak ada sisa tabel, schema `rls_test`, atau user test.
-- **Apply:** migration `shared_savings` dan `shared_savings_revoke_trigger_execute` berhasil.
+- **Dry run sebelum apply (Fase 0, 2026-11-11):** migration dan `supabase/tests/shared_savings_rls.sql` (saat itu 46 pemeriksaan) dijalankan dalam satu transaksi yang di-`ROLLBACK`. Hasil: `SEMUA SKENARIO RLS LULUS`. Setelah itu dicek: tidak ada sisa tabel, schema `rls_test`, atau user test.
+- **Apply:** tiga migration berhasil, berurutan:
+  1. `20261111114000_shared_savings` (2026-11-11)
+  2. `20261111114419_shared_savings_revoke_trigger_execute` (2026-11-11)
+  3. `20261112071835_shared_savings_goal_management` (2026-11-12, setelah persetujuan)
+- **Skrip RLS di live (2026-11-12, setelah migration 3):** skrip yang sama dijalankan dalam transaksi yang di-`ROLLBACK`. Hasil: **`SEMUA SKENARIO RLS LULUS`** (75 pemeriksaan; NOTICE per pemeriksaan tidak terlihat di tool, tetapi setiap kegagalan menghentikan skrip, dan skrip sampai ke baris penutup). Sesudahnya dicek: tidak ada user test, schema `rls_test`, grup test, atau baris aktivitas yang tersisa.
 - **Struktur:** snapshot `live-schema.ts` diregenerasi dari live (2026-11-11). Tabel Nabung Bareng dan tabel lama identik dengan live (nullable, default, dan CHECK).
 - **RLS:** aktif di 6 tabel, 13 policy.
 - **Trigger aktivitas:** tetap berjalan untuk `authenticated` (diuji dalam transaksi yang di-rollback: 1 aktivitas `member_joined` tercatat, dan baris owner terbentuk).
 - **Advisor keamanan (setelah perbaikan):**
-  - *Dari fase ini, diterima:* 11 RPC dan helper bisa dieksekusi `authenticated`. Itu disengaja, karena dipanggil client atau dievaluasi oleh RLS. Helper hanya membocorkan "apakah saya anggota grup dengan UUID ini".
+  - *Dari fase ini, diterima:* 12 RPC dan helper bisa dieksekusi `authenticated`, termasuk `can_manage_goal` (ditambahkan 2026-11-12). Itu disengaja, karena dipanggil client atau dievaluasi oleh RLS. Helper hanya membocorkan "apakah saya anggota grup dengan UUID ini".
   - *Sudah ada sebelumnya, belum diubah:* `handle_new_user` dan `rls_auto_enable` bisa dieksekusi `anon`; `handle_new_user` dan `update_updated_at_column` belum punya `search_path` tetap; proteksi password bocor belum aktif.
   - *Sudah diperbaiki:* empat fungsi trigger aktivitas tidak lagi bisa dieksekusi `anon`.
 
 **Sebelum apply** (PostgreSQL 16.15 lokal, dengan stub `auth`): migration berhasil diapply, skrip RLS 46/46 lulus, empat mutasi yang sengaja merusak RLS/guard tertangkap, dan logika drift-test tidak menemukan drift.
+
+**Fase 0c dan 0d (2026-11-12, PostgreSQL 16 lokal):** skrip RLS 75/75 lulus setelah migration 3 dan skenario anggota keluar ditambahkan. Mutation check untuk `can_manage_goal` (helper dibuat mengizinkan semua anggota) tertangkap pada skenario circle.
 
 **Belum**:
 
@@ -193,7 +200,7 @@ Ini deviasi kecil atau pengisian celah yang tidak dijawab panduan. Tinjau sebelu
 
 ## 9. Langkah berikutnya (menunggu persetujuan)
 
-Fase 0 selesai di live. Yang tersisa:
+Fase 0 selesai di live, termasuk keputusan produk couple vs circle (bagian 6 item 9, migration 3). Yang tersisa:
 
-1. **Keputusan produk couple vs circle** (lihat bagian 4 dan laporan penutup). Bila dipilih "couple setara, circle hanya pembuat goal/owner", dibuat migration baru, setelah persetujuan.
-2. **Fase 1:** lapisan data client, setelah Fase 0 ditutup.
+1. **Fase 1:** lapisan data client. Dimulai setelah persetujuan.
+2. **Verifikasi TypeScript:** `npm test` dan `npx tsc -b --noEmit` belum dijalankan. Perlu `node_modules` yang tersedia, dan registry npm yang bisa diakses.
