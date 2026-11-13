@@ -1,17 +1,21 @@
 import type { GroupActivity } from '../../types/shared'
-import { centsToDisplay } from '../../utils/currency'
+import { formatCurrency } from '../../utils/currency'
 
 /**
  * Mengubah satu baris aktivitas menjadi kalimat Bahasa Indonesia.
  * `names` memetakan userId -> nama (dari anggota grup, termasuk yang sudah keluar).
  */
-export function describeActivity(activity: GroupActivity, names: Map<string, string>): string {
+export function describeActivity(
+  activity: GroupActivity,
+  names: Map<string, string>,
+  currency = 'IDR',
+): string {
   const nameOf = (userId: string | null | undefined): string => {
     if (!userId) return 'Seseorang'
     return names.get(userId) ?? 'Seseorang'
   }
   const actor = nameOf(activity.actorId)
-  const money = (cents: number) => centsToDisplay(cents)
+  const money = (cents: number) => formatCurrency(cents, currency)
 
   switch (activity.action) {
     case 'member_joined':
