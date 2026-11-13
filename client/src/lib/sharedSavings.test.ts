@@ -2,22 +2,28 @@
  * Kontrak lapisan data Nabung Bareng (src/lib/sharedSavings.ts) dan mapper (src/types/shared.ts).
  *
  * Hanya batas Supabase yang di-mock. Builder mock mencatat setiap pemanggilan dan
- * meng-resolve ke `h.result`, sehingga tes bisa memeriksa filter, payload, dan pemetaan galat.
+ * meng-resolve ke `h.state.result`, atau ke `h.state.resolver` bila diset (dipakai tes paginasi
+ * untuk mensimulasikan filter keyset di atas data in-memory).
  */
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 
+interface Call {
+  method: string
+  args: unknown[]
+}
+
 const h = vi.hoisted(() => {
-  type Call = { method: string; args: unknown[] }
   const state = {
     calls: [] as Call[],
-    result: { data: null as unknown, error: null as unknown },
-    rpcResult: { data: null as unknown, error: null as unknown },
+    result: { data: null, error: null } as { data: unknown; error: unknown },
+    resolver: null as null | (() => { data: unknown; error: unknown }),
+    rpcResult: { data: null, error: null } as { data: unknown; error: unknown },
     session: { user: { id: '11111111-1111-4111-8111-111111111111' } } as { user: { id: string } } | null,
   }
 
   const builder: Record<string, unknown> = {}
   const chainable = [
-    'select', 'insert', 'update', 'delete', 'eq', 'is', 'order', 'limit', 'lt', 'single', 'maybeSingle',
+    'select', 'insert', 'update', 'delete', 'eq', 'is', 'or', 'order', 'limit', 'lt', 'single', 'maybeSingle',
   ]
   for (const m of chainable) {
     builder[m] = (...args: unknown[]) => {
@@ -26,7 +32,7 @@ const h = vi.hoisted(() => {
     }
   }
   builder.then = (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) =>
-    Promise.resolve(state.result).then(resolve, reject)
+    Promise.resolve(state.resolver ? state.resolver() : state.result).then(resolve, reject)
 
   const supabase = {
     from: vi.fn((table: string) => {
@@ -52,6 +58,7 @@ vi.mock('./supabase', () => ({ supabase: h.supabase }))
 
 import {
   SharedSavingsError,
+  activityCursor,
   addContribution,
   addGoalParticipant,
   createGoal,
@@ -61,9 +68,11 @@ import {
   listGroupActivity,
   localDateString,
   removeGoalParticipant,
+  renameGroup,
   toSharedSavingsError,
   updateContribution,
   updateGoal,
+  type ActivityCursor,
 } from './sharedSavings'
 import {
   MAX_CENTS,
@@ -98,6 +107,7 @@ const CONTRIB_ROW: ContributionRow = {
 beforeEach(() => {
   h.state.calls = []
   h.state.result = { data: null, error: null }
+  h.state.resolver = null
   h.state.rpcResult = { data: null, error: null }
   h.state.session = { user: { id: USER } }
   vi.clearAllMocks()
@@ -107,13 +117,12 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-/** Method yang dipanggil pada query terakhir, untuk memeriksa filter dan urutan. */
 function methods(): string[] {
-  return h.state.calls.map((c: { method: string }) => c.method)
+  return h.state.calls.map((c: Call) => c.method)
 }
 
-function callOf(method: string) {
-  return h.state.calls.find((c: { method: string }) => c.method === method)
+function callOf(method: string): Call | undefined {
+  return h.state.calls.find((c: Call) => c.method === method)
 }
 
 // ---------------------------------------------------------------------------
@@ -278,14 +287,49 @@ describe('toSharedSavingsError', () => {
 describe('galat dari fungsi lib', () => {
   it('RPC join: kode undangan di-trim dan di-uppercase, galat dipetakan', async () => {
     h.state.rpcResult = { data: null, error: { message: 'INVITE_INVALID', code: 'P0001' } }
-    const promise = joinGroupByCode('  ab12cd34 ')
-    await expect(promise).rejects.toMatchObject({ code: 'INVITE_INVALID' })
+    await expect(joinGroupByCode('  ab12cd34 ')).rejects.toMatchObject({ code: 'INVITE_INVALID' })
     expect(h.supabase.rpc).toHaveBeenCalledWith('join_group_by_code', { p_code: 'AB12CD34' })
   })
 
   it('RPC join: sukses mengembalikan id grup', async () => {
     h.state.rpcResult = { data: GROUP, error: null }
     await expect(joinGroupByCode('ab12cd34')).resolves.toBe(GROUP)
+  })
+
+  it('peserta ganda (23505) menjadi ALREADY_PARTICIPANT dengan pesan Indonesia', async () => {
+    h.state.result = {
+      data: null,
+      error: { code: '23505', message: 'duplicate key value violates unique constraint "goal_participants_pkey"' },
+    }
+    const err = await addGoalParticipant(GOAL, OTHER_USER).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(SharedSavingsError)
+    expect((err as SharedSavingsError).code).toBe('ALREADY_PARTICIPANT')
+    expect((err as SharedSavingsError).message).toContain('peserta')
+    expect((err as SharedSavingsError).message).not.toMatch(/goal_participants_pkey|duplicate/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Grup: rename
+// ---------------------------------------------------------------------------
+
+describe('renameGroup', () => {
+  it('nama kosong (setelah trim) ditolak dengan INVALID_NAME tanpa request', async () => {
+    await expect(renameGroup(GROUP, '   ')).rejects.toMatchObject({ code: 'INVALID_NAME' })
+    expect(callOf('from')).toBeUndefined()
+  })
+
+  it('nama di-trim dan UPDATE memakai .select()', async () => {
+    h.state.result = { data: [{ id: GROUP, name: 'Rumah Baru', type: 'couple', currency: 'IDR', invite_code: 'AB12CD34', created_by: USER, created_at: 'x', updated_at: 'x' }], error: null }
+    const group = await renameGroup(GROUP, '  Rumah Baru ')
+    expect(group.name).toBe('Rumah Baru')
+    expect(callOf('update')?.args[0]).toEqual({ name: 'Rumah Baru' })
+    expect(methods()).toEqual(expect.arrayContaining(['update', 'eq', 'select']))
+  })
+
+  it('0 baris = PERMISSION_DENIED', async () => {
+    h.state.result = { data: [], error: null }
+    await expect(renameGroup(GROUP, 'Baru')).rejects.toMatchObject({ code: 'PERMISSION_DENIED' })
   })
 })
 
@@ -298,7 +342,6 @@ describe('listContributions', () => {
     h.state.result = { data: [CONTRIB_ROW], error: null }
     const rows = await listContributions(GOAL)
     expect(rows).toHaveLength(1)
-    expect(methods()).toContain('is')
     expect(callOf('is')?.args).toEqual(['deleted_at', null])
     expect(callOf('from')?.args).toEqual(['contributions'])
   })
@@ -400,10 +443,7 @@ describe('updateContribution & deleteContribution: 0 baris = PERMISSION_DENIED',
   })
 
   it('setoran yang sudah dihapus (trigger) dipetakan ke CONTRIBUTION_DELETED', async () => {
-    h.state.result = {
-      data: null,
-      error: { code: 'P0001', message: 'CONTRIBUTION_DELETED' },
-    }
+    h.state.result = { data: null, error: { code: 'P0001', message: 'CONTRIBUTION_DELETED' } }
     await expect(updateContribution(CONTRIB, { amount: 2000 })).rejects.toMatchObject({
       code: 'CONTRIBUTION_DELETED',
     })
@@ -430,12 +470,116 @@ describe('peserta goal', () => {
   })
 })
 
+// ---------------------------------------------------------------------------
+// Aktivitas: paginasi keyset
+// ---------------------------------------------------------------------------
+
+/**
+ * Simulasi minimal PostgREST untuk group_activity: menerapkan eq(group_id), filter .or() berbentuk
+ * `created_at.lt."X",and(created_at.eq."X",id.lt."Y")`, urutan created_at desc & id desc, dan limit.
+ */
+function activityResolver(rows: Array<{ id: string; group_id: string; created_at: string }>) {
+  return () => {
+    let out = [...rows]
+    const calls = h.state.calls
+    for (const c of calls) {
+      if (c.method === 'eq' && c.args[0] === 'group_id') {
+        out = out.filter((r) => r.group_id === c.args[1])
+      }
+      if (c.method === 'or') {
+        const expr = String(c.args[0])
+        const lt = /created_at\.lt\."([^"]+)"/.exec(expr)
+        const eq = /created_at\.eq\."([^"]+)"/.exec(expr)
+        const idLt = /id\.lt\."([^"]+)"/.exec(expr)
+        if (!lt || !eq || !idLt) throw new Error(`filter tidak dikenal: ${expr}`)
+        const x = lt[1]
+        const y = idLt[1]
+        out = out.filter((r) => r.created_at < x || (r.created_at === x && r.id < y))
+      }
+    }
+    out.sort((a, b) =>
+      a.created_at !== b.created_at ? (a.created_at < b.created_at ? 1 : -1) : a.id < b.id ? 1 : a.id > b.id ? -1 : 0,
+    )
+    const limit = calls.find((c: Call) => c.method === 'limit')
+    if (limit) out = out.slice(0, Number(limit.args[0]))
+    return { data: out, error: null }
+  }
+}
+
 describe('listGroupActivity', () => {
-  it('membatasi limit dan memakai cursor before', async () => {
+  it('membatasi limit (1..100)', async () => {
     h.state.result = { data: [], error: null }
-    await listGroupActivity(GROUP, { limit: 999, before: '2026-11-12T00:00:00Z' })
+    await listGroupActivity(GROUP, { limit: 999 })
     expect(callOf('limit')?.args).toEqual([100])
-    expect(callOf('lt')?.args).toEqual(['created_at', '2026-11-12T00:00:00Z'])
+  })
+
+  it('tanpa cursor tidak memakai .or()', async () => {
+    h.state.result = { data: [], error: null }
+    await listGroupActivity(GROUP)
+    expect(callOf('or')).toBeUndefined()
+  })
+
+  it('cursor memakai filter created_at < X OR (created_at = X AND id < Y)', async () => {
+    h.state.result = { data: [], error: null }
+    await listGroupActivity(GROUP, {
+      cursor: { createdAt: '2026-11-12T01:00:00.000000+00:00', id: '00000000-0000-4000-8000-000000000005' },
+    })
+    expect(callOf('or')?.args[0]).toBe(
+      'created_at.lt."2026-11-12T01:00:00.000000+00:00",and(created_at.eq."2026-11-12T01:00:00.000000+00:00",id.lt."00000000-0000-4000-8000-000000000005")',
+    )
+  })
+
+  it('cursor yang mengandung karakter berbahaya ditolak sebelum request', async () => {
+    await expect(
+      listGroupActivity(GROUP, { cursor: { createdAt: 'x"),id.gt.0', id: 'abc' } }),
+    ).rejects.toMatchObject({ code: 'UNKNOWN' })
+    expect(callOf('from')).toBeUndefined()
+  })
+
+  it('dua baris dengan created_at sama tidak terlewat di batas halaman (limit 2, 5 baris)', async () => {
+    const ts = '2026-11-12T01:00:00.000000+00:00'
+    const rows = [1, 2, 3, 4, 5].map((n) => ({
+      id: `00000000-0000-4000-8000-00000000000${n}`,
+      group_id: GROUP,
+      created_at: ts,
+    }))
+    const seen: string[] = []
+    let cursor: ActivityCursor | undefined
+    for (let page = 0; page < 10; page++) {
+      h.state.calls = []
+      h.state.resolver = activityResolver(rows)
+      const got = await listGroupActivity(GROUP, { limit: 2, cursor })
+      h.state.resolver = null
+      if (got.length === 0) break
+      seen.push(...got.map((r) => r.id))
+      cursor = activityCursor(got[got.length - 1])
+      if (got.length < 2) break
+    }
+    expect(seen).toHaveLength(5)
+    expect(new Set(seen).size).toBe(5)
+    expect([...seen].sort()).toEqual(rows.map((r) => r.id).sort())
+  })
+
+  it('campuran created_at berbeda juga tidak terlewat', async () => {
+    const rows = [
+      { id: 'a-1', group_id: GROUP, created_at: '2026-11-12T03:00:00Z' },
+      { id: 'a-2', group_id: GROUP, created_at: '2026-11-12T02:00:00Z' },
+      { id: 'a-3', group_id: GROUP, created_at: '2026-11-12T02:00:00Z' },
+      { id: 'a-4', group_id: GROUP, created_at: '2026-11-12T02:00:00Z' },
+      { id: 'a-5', group_id: GROUP, created_at: '2026-11-12T01:00:00Z' },
+    ]
+    const seen: string[] = []
+    let cursor: ActivityCursor | undefined
+    for (let page = 0; page < 10; page++) {
+      h.state.calls = []
+      h.state.resolver = activityResolver(rows)
+      const got = await listGroupActivity(GROUP, { limit: 2, cursor })
+      h.state.resolver = null
+      if (got.length === 0) break
+      seen.push(...got.map((r) => r.id))
+      cursor = activityCursor(got[got.length - 1])
+    }
+    expect(seen).toEqual(['a-1', 'a-4', 'a-3', 'a-2', 'a-5'])
   })
 })
 

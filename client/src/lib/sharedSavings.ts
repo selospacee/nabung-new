@@ -7,6 +7,7 @@
  * - `user_id` kontribusi dan `created_by` goal diambil dari session, tidak dari input.
  * - UPDATE/DELETE memakai `.select()`; hasil kosong = PERMISSION_DENIED.
  * - INSERT yang ditolak RLS (SQLSTATE 42501) = PERMISSION_DENIED.
+ * - Peserta ganda (SQLSTATE 23505 saat menambah peserta) = ALREADY_PARTICIPANT.
  * - Kode galat RPC dipetakan ke `SharedSavingsError` dengan pesan Indonesia.
  *   Pesan SQL mentah tidak pernah diteruskan ke UI.
  *
@@ -26,6 +27,7 @@ import {
   type ContributionRow,
   type Group,
   type GroupActivity,
+  type GroupActivityRow,
   type GroupGoal,
   type GroupGoalRow,
   type GroupMember,
@@ -37,7 +39,6 @@ import {
   type GoalProgress,
   type GoalProgressRow,
   type GoalStatus,
-  type GroupActivityRow,
 } from '../types/shared'
 
 // ---------------------------------------------------------------------------
@@ -62,13 +63,14 @@ const RPC_ERROR_CODES = [
 export type SharedSavingsErrorCode =
   | (typeof RPC_ERROR_CODES)[number]
   | 'PERMISSION_DENIED'
+  | 'ALREADY_PARTICIPANT'
   | 'INVALID_AMOUNT'
   | 'INVALID_DATE'
   | 'UNKNOWN'
 
 const MESSAGES: Record<SharedSavingsErrorCode, string> = {
   NOT_AUTHENTICATED: 'Kamu perlu masuk terlebih dahulu.',
-  INVALID_NAME: 'Nama grup tidak valid.',
+  INVALID_NAME: 'Nama grup tidak valid. Nama tidak boleh kosong.',
   INVALID_TYPE: 'Jenis grup tidak valid.',
   INVITE_INVALID: 'Kode undangan tidak ditemukan. Periksa kembali kodenya.',
   ALREADY_MEMBER: 'Kamu sudah menjadi anggota grup ini.',
@@ -79,6 +81,7 @@ const MESSAGES: Record<SharedSavingsErrorCode, string> = {
   SAME_USER: 'Tidak bisa memindahkan kepemilikan ke diri sendiri.',
   CONTRIBUTION_DELETED: 'Setoran ini sudah dihapus dan tidak bisa dipulihkan.',
   PERMISSION_DENIED: 'Kamu tidak punya izin untuk melakukan ini.',
+  ALREADY_PARTICIPANT: 'Orang ini sudah menjadi peserta goal.',
   INVALID_AMOUNT: 'Nominal harus bilangan bulat lebih dari 0.',
   INVALID_DATE: 'Format tanggal harus YYYY-MM-DD.',
   UNKNOWN: 'Terjadi kesalahan. Coba lagi beberapa saat.',
@@ -172,6 +175,12 @@ function dateInput(value: string): string {
   return value
 }
 
+function nameInput(value: string): string {
+  const name = value.trim()
+  if (name.length === 0) throw new SharedSavingsError('INVALID_NAME')
+  return name
+}
+
 /** Tanggal lokal perangkat sebagai YYYY-MM-DD (bukan UTC). */
 export function localDateString(date: Date = new Date()): string {
   const y = date.getFullYear()
@@ -193,14 +202,14 @@ function requireGroupType(value: string): GroupType {
 export function createGroup(input: { name: string; type: GroupType; currency?: string }): Promise<Group> {
   return run(async () => {
     const res = await supabase.rpc('create_group', {
-      p_name: input.name.trim(),
+      p_name: nameInput(input.name),
       p_type: requireGroupType(input.type),
       p_currency: input.currency ?? null,
     })
-    const data = ok(res)
+    const data = ok<GroupRow | GroupRow[]>(res)
     const row = Array.isArray(data) ? data[0] : data
     if (!row) throw new SharedSavingsError('UNKNOWN')
-    return mapGroup(row as GroupRow)
+    return mapGroup(row)
   })
 }
 
@@ -208,7 +217,7 @@ export function createGroup(input: { name: string; type: GroupType; currency?: s
 export function joinGroupByCode(code: string): Promise<string> {
   return run(async () => {
     const res = await supabase.rpc('join_group_by_code', { p_code: code.trim().toUpperCase() })
-    const id = ok(res)
+    const id = ok<string>(res)
     if (typeof id !== 'string') throw new SharedSavingsError('UNKNOWN')
     return id
   })
@@ -232,19 +241,25 @@ export function transferOwnership(groupId: string, newOwnerId: string): Promise<
 export function regenerateInviteCode(groupId: string): Promise<string> {
   return run(async () => {
     const res = await supabase.rpc('regenerate_invite_code', { p_group_id: groupId })
-    const code = ok(res)
+    const code = ok<string>(res)
     if (typeof code !== 'string') throw new SharedSavingsError('UNKNOWN')
     return code
+  })
+}
+
+/** Mengubah nama grup (hanya owner; kolom lain tidak bisa diubah client). 0 baris = PERMISSION_DENIED. */
+export function renameGroup(groupId: string, name: string): Promise<Group> {
+  return run(async () => {
+    const trimmed = nameInput(name)
+    const res = await supabase.from('groups').update({ name: trimmed }).eq('id', groupId).select()
+    return mapGroup(requireOneRow(ok<GroupRow[]>(res)))
   })
 }
 
 /** Grup tempat saya anggota aktif (RLS membatasi hasil). */
 export function listMyGroups(): Promise<Group[]> {
   return run(async () => {
-    const res = await supabase
-      .from('groups')
-      .select('*')
-      .order('created_at', { ascending: false })
+    const res = await supabase.from('groups').select('*').order('created_at', { ascending: false })
     return (ok<GroupRow[]>(res) ?? []).map((row) => mapGroup(row))
   })
 }
@@ -252,8 +267,8 @@ export function listMyGroups(): Promise<Group[]> {
 export function getGroup(groupId: string): Promise<Group | null> {
   return run(async () => {
     const res = await supabase.from('groups').select('*').eq('id', groupId).maybeSingle()
-    const row = ok(res)
-    return row ? mapGroup(row as GroupRow) : null
+    const row = ok<GroupRow>(res)
+    return row ? mapGroup(row) : null
   })
 }
 
@@ -335,9 +350,14 @@ export function listGoalParticipants(goalId: string): Promise<GoalParticipant[]>
   })
 }
 
+/** Menambah peserta. Peserta ganda (23505) = ALREADY_PARTICIPANT. */
 export function addGoalParticipant(goalId: string, userId: string): Promise<void> {
   return run(async () => {
     const res = await supabase.from('goal_participants').insert({ goal_id: goalId, user_id: userId })
+    const code = (res.error as { code?: unknown } | null)?.code
+    if (code === '23505') {
+      throw new SharedSavingsError('ALREADY_PARTICIPANT', undefined, { cause: res.error })
+    }
     ok(res)
   })
 }
@@ -442,24 +462,49 @@ export function deleteContribution(contributionId: string): Promise<Contribution
 }
 
 // ---------------------------------------------------------------------------
-// Aktivitas (paginasi berbasis cursor `before` = created_at baris terakhir)
+// Aktivitas (paginasi keyset, urutan created_at desc, id desc)
 // ---------------------------------------------------------------------------
 
+/** Posisi halaman aktivitas: baris terakhir yang sudah dibaca. */
+export interface ActivityCursor {
+  createdAt: string
+  id: string
+}
+
+/** Cursor untuk halaman berikutnya, dari baris terakhir halaman sebelumnya. */
+export function activityCursor(last: Pick<GroupActivity, 'createdAt' | 'id'>): ActivityCursor {
+  return { createdAt: last.createdAt, id: last.id }
+}
+
+// Nilai cursor dimasukkan ke filter .or() dalam tanda kutip; batasi karakternya agar tidak bisa merusak filter.
+const CURSOR_TS_RE = /^[0-9T:.+\-Z ]+$/
+const CURSOR_ID_RE = /^[0-9a-zA-Z-]+$/
+
+/**
+ * Baris aktivitas berikutnya setelah `cursor`:
+ * created_at < X OR (created_at = X AND id < Y), diurutkan created_at desc, id desc.
+ * Dua baris dengan created_at sama tidak terlewat di batas halaman.
+ */
 export function listGroupActivity(
   groupId: string,
-  opts: { limit?: number; before?: string } = {},
+  opts: { limit?: number; cursor?: ActivityCursor } = {},
 ): Promise<GroupActivity[]> {
   return run(async () => {
     const limit = Math.min(Math.max(Math.trunc(opts.limit ?? 50), 1), 100)
-    let query = supabase
-      .from('group_activity')
-      .select('*')
-      .eq('group_id', groupId)
+    let query = supabase.from('group_activity').select('*').eq('group_id', groupId)
+    if (opts.cursor) {
+      const { createdAt, id } = opts.cursor
+      if (!CURSOR_TS_RE.test(createdAt) || !CURSOR_ID_RE.test(id)) {
+        throw new SharedSavingsError('UNKNOWN')
+      }
+      query = query.or(
+        `created_at.lt."${createdAt}",and(created_at.eq."${createdAt}",id.lt."${id}")`,
+      )
+    }
+    const res = await query
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
       .limit(limit)
-    if (opts.before) query = query.lt('created_at', opts.before)
-    const res = await query
     return (ok<GroupActivityRow[]>(res) ?? []).map((row) => mapGroupActivity(row))
   })
 }

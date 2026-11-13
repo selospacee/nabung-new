@@ -1,15 +1,17 @@
 import {
   getGoalProgress,
   listContributions,
+  listGoalParticipants,
   listGroupActivity,
   listGroupGoals,
 } from '../lib/sharedSavings'
-import type { Contribution, GroupActivity, GoalWithProgress } from '../types/shared'
+import type { Contribution, GoalParticipant, GroupActivity, GoalWithProgress } from '../types/shared'
 import { useSharedQuery, type SharedQuery } from './useGroups'
 
 const NO_GOALS: GoalWithProgress[] = []
 const NO_CONTRIBUTIONS: Contribution[] = []
 const NO_ACTIVITY: GroupActivity[] = []
+const NO_PARTICIPANTS: GoalParticipant[] = []
 
 /**
  * Goal sebuah grup beserta progresnya (dari view `goal_progress`).
@@ -42,7 +44,17 @@ export function useGoalContributions(goalId: string | null | undefined): SharedQ
   )
 }
 
-/** Halaman pertama aktivitas grup (terbaru dulu). Paginasi lanjutan: `listGroupActivity(id, { before })`. */
+/** Peserta sebuah goal. Realtime: perubahan `goal_participants` untuk goal ini. */
+export function useGoalParticipants(goalId: string | null | undefined): SharedQuery<GoalParticipant[]> {
+  return useSharedQuery<GoalParticipant[]>(
+    goalId ?? null,
+    NO_PARTICIPANTS,
+    (id) => listGoalParticipants(id),
+    (id) => [{ table: 'goal_participants', filter: `goal_id=eq.${id}` }],
+  )
+}
+
+/** Halaman pertama aktivitas grup (terbaru dulu). Halaman berikutnya: `listGroupActivity(id, { cursor })`. */
 export function useGroupActivity(groupId: string | null | undefined): SharedQuery<GroupActivity[]> {
   return useSharedQuery<GroupActivity[]>(
     groupId ?? null,

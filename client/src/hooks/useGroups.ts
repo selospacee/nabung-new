@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { getGroup, listMyGroups, SharedSavingsError, toSharedSavingsError } from '../lib/sharedSavings'
 import type { Group } from '../types/shared'
@@ -25,11 +26,16 @@ interface QueryState<T> {
 
 let channelSeq = 0
 
+/** Status channel yang berarti event bisa terlewat; setelah SUBSCRIBED lagi, query dimuat ulang. */
+const DOWN_STATUSES = new Set(['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED'])
+
 /**
  * Pola bersama untuk hook Nabung Bareng:
  * - `key` adalah id aktif (null = tidak ada query). Hasil respons untuk key lama dibuang.
  * - Realtime memicu refetch query ini saja, bukan sinkronisasi penuh.
- * - Channel dilepas saat unmount dan saat key berganti (cleanup di effect).
+ * - Refetch juga terjadi saat channel kembali SUBSCRIBED setelah putus, dan saat tab kembali terlihat,
+ *   supaya event yang terlewat terkejar.
+ * - Channel dan listener dilepas saat unmount dan saat key berganti (cleanup di effect).
  */
 export function useSharedQuery<T>(
   key: string | null,
@@ -71,27 +77,44 @@ export function useSharedQuery<T>(
 
     void load(key)
 
-    const subs = latest.current.subscriptions(key)
-    if (subs.length === 0) return
-
-    const id = ++channelSeq
-    let channel = supabase.channel(`shared:${id}:${key}`)
-    for (const sub of subs) {
-      channel = channel.on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: sub.table, filter: sub.filter },
-        () => {
-          if (keyRef.current === key) void load(key)
-        },
-      )
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && keyRef.current === key) void load(key)
     }
-    channel.subscribe()
+    document.addEventListener('visibilitychange', onVisible)
+
+    let channel: RealtimeChannel | null = null
+    const subs = latest.current.subscriptions(key)
+    if (subs.length > 0) {
+      let ch = supabase.channel(`shared:${++channelSeq}:${key}`)
+      for (const sub of subs) {
+        ch = ch.on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: sub.table, filter: sub.filter },
+          () => {
+            if (keyRef.current === key) void load(key)
+          },
+        )
+      }
+      let wasDown = false
+      ch.subscribe((status: string) => {
+        if (DOWN_STATUSES.has(status)) {
+          wasDown = true
+          return
+        }
+        if (status === 'SUBSCRIBED' && wasDown) {
+          wasDown = false
+          if (keyRef.current === key) void load(key)
+        }
+      })
+      channel = ch
+    }
 
     return () => {
+      document.removeEventListener('visibilitychange', onVisible)
       // Buang respons yang masih terbang untuk key ini, lalu lepas channel.
       reqRef.current++
       keyRef.current = null
-      supabase.removeChannel(channel)
+      if (channel) supabase.removeChannel(channel)
     }
   }, [key, load])
 
@@ -109,12 +132,46 @@ export function useSharedQuery<T>(
   }
 }
 
+/**
+ * Id user yang sedang login. `undefined` = belum diketahui, `null` = tidak ada session.
+ * Mengikuti perubahan akun (login, logout, ganti akun).
+ */
+export function useAuthUserId(): string | null | undefined {
+  const [userId, setUserId] = useState<string | null | undefined>(undefined)
+
+  useEffect(() => {
+    let active = true
+    supabase.auth
+      .getSession()
+      .then(({ data }: { data: { session: { user: { id: string } } | null } }) => {
+        if (active) setUserId(data.session?.user.id ?? null)
+      })
+      .catch(() => {
+        if (active) setUserId(null)
+      })
+    const { data: sub } = supabase.auth.onAuthStateChange((_event: string, session: { user: { id: string } } | null) => {
+      if (active) setUserId(session?.user.id ?? null)
+    })
+    return () => {
+      active = false
+      sub.subscription.unsubscribe()
+    }
+  }, [])
+
+  return userId
+}
+
 const NO_GROUPS: Group[] = []
 
-/** Daftar grup tempat saya anggota aktif. */
+/**
+ * Daftar grup tempat saya anggota aktif. Key memuat id user, sehingga daftar akun sebelumnya
+ * tidak pernah terlihat setelah ganti akun. Tanpa user, key null (tidak ada query).
+ */
 export function useMyGroups(): SharedQuery<Group[]> {
+  const userId = useAuthUserId()
+  const key = userId ? `me:${userId}` : null
   return useSharedQuery<Group[]>(
-    'me',
+    key,
     NO_GROUPS,
     () => listMyGroups(),
     () => [{ table: 'group_members' }, { table: 'groups' }],
