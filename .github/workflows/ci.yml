@@ -1,0 +1,50 @@
+# Verifikasi otomatis: install, tes, dan typecheck client.
+#
+# Typecheck memakai baseline: 5 error lama di client/src/pages/TransactionsPage.tsx
+# (lihat docs/testing.md). Job gagal bila jumlah "error TS" lebih dari BASELINE.
+# Saat error lama sudah diperbaiki, turunkan BASELINE menjadi 0 agar baseline terkunci di nol.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    env:
+      # Jumlah error tsc yang diterima (baseline lama). Turunkan ke 0 setelah diperbaiki.
+      BASELINE: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Typecheck (hitung error vs baseline)
+        run: |
+          npx tsc -b --noEmit 2>&1 | tee tsc.log || true
+          COUNT=$(grep -c "error TS" tsc.log || true)
+          echo "Jumlah error TS: ${COUNT} (baseline: ${BASELINE})"
+          if [ "${COUNT}" -gt "${BASELINE}" ]; then
+            echo "::error::Error tsc bertambah: ${COUNT} > baseline ${BASELINE}"
+            exit 1
+          fi
