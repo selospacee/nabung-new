@@ -40,6 +40,8 @@ jobs:
         run: npm test
 
       - name: Typecheck (hitung error vs baseline)
+        # Tetap jalan meski tes gagal, agar jumlah error tsc selalu terlihat.
+        if: always()
         run: |
           npx tsc -b --noEmit 2>&1 | tee tsc.log || true
           COUNT=$(grep -c "error TS" tsc.log || true)
