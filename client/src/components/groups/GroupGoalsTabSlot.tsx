@@ -1,18 +1,13 @@
-import { EmptyState } from '../ui'
+import { GroupGoalsTab } from './goals'
 
 interface GroupGoalsTabSlotProps {
   groupId: string
 }
 
 /**
- * Titik integrasi untuk tab Goals (Fase 3).
- * Fase 3 mengganti isi komponen ini; props `groupId` tetap. Jangan taruh logika data di sini.
+ * Titik integrasi tab Goals di halaman grup. Hanya meneruskan ke GroupGoalsTab
+ * (pintu masuk tunggal di ./goals); tidak ada logika data di sini.
  */
-export function GroupGoalsTabSlot({ groupId: _groupId }: GroupGoalsTabSlotProps) {
-  return (
-    <EmptyState
-      title="Goal belum tersedia"
-      description="Fitur goal bersama akan hadir di pembaruan berikutnya."
-    />
-  )
+export function GroupGoalsTabSlot({ groupId }: GroupGoalsTabSlotProps) {
+  return <GroupGoalsTab groupId={groupId} />
 }
