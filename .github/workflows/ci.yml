@@ -1,8 +1,8 @@
 # Verifikasi otomatis: install, tes, dan typecheck client.
 #
-# Typecheck memakai baseline: 5 error lama di client/src/pages/TransactionsPage.tsx
-# (lihat docs/testing.md). Job gagal bila jumlah "error TS" lebih dari BASELINE.
-# Saat error lama sudah diperbaiki, turunkan BASELINE menjadi 0 agar baseline terkunci di nol.
+# Typecheck memakai baseline. Job gagal bila jumlah "error TS" lebih dari BASELINE.
+# Baseline sekarang 0: 5 error lama di client/src/pages/TransactionsPage.tsx sudah diperbaiki
+# di main (lihat docs/testing.md). Jangan dinaikkan lagi.
 #
 # Langkah typecheck dan ringkasan tes berjalan walau tes merah (if: always()),
 # supaya jumlah error tsc selalu tercetak di log.
@@ -23,8 +23,8 @@ jobs:
       run:
         working-directory: client
     env:
-      # Jumlah error tsc yang diterima (baseline lama). Turunkan ke 0 setelah diperbaiki.
-      BASELINE: 5
+      # Jumlah error tsc yang diterima. 0 = tidak boleh ada error TS.
+      BASELINE: 0
     steps:
       - name: Checkout
         uses: actions/checkout@v4
