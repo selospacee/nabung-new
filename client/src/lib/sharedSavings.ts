@@ -491,12 +491,13 @@ export function listGroupActivity(
 ): Promise<GroupActivity[]> {
   return run(async () => {
     const limit = Math.min(Math.max(Math.trunc(opts.limit ?? 50), 1), 100)
+    // Validasi cursor dulu: nilai berbahaya ditolak sebelum ada request ke server.
+    if (opts.cursor && (!CURSOR_TS_RE.test(opts.cursor.createdAt) || !CURSOR_ID_RE.test(opts.cursor.id))) {
+      throw new SharedSavingsError('UNKNOWN')
+    }
     let query = supabase.from('group_activity').select('*').eq('group_id', groupId)
     if (opts.cursor) {
       const { createdAt, id } = opts.cursor
-      if (!CURSOR_TS_RE.test(createdAt) || !CURSOR_ID_RE.test(id)) {
-        throw new SharedSavingsError('UNKNOWN')
-      }
       query = query.or(
         `created_at.lt."${createdAt}",and(created_at.eq."${createdAt}",id.lt."${id}")`,
       )

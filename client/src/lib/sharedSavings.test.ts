@@ -480,7 +480,8 @@ describe('peserta goal', () => {
  */
 function activityResolver(rows: Array<{ id: string; group_id: string; created_at: string }>) {
   return () => {
-    let out = [...rows]
+    // Baris RPC/tabel selalu punya action dan ref; fixture ini hanya mengisi keduanya.
+    let out = rows.map((r) => ({ action: 'member_joined', ref: { user_id: 'u1' }, ...r }))
     const calls = h.state.calls
     for (const c of calls) {
       if (c.method === 'eq' && c.args[0] === 'group_id') {
