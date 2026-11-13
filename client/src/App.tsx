@@ -7,6 +7,9 @@ import { AccountsPage } from './pages/AccountsPage'
 import { BudgetsPage } from './pages/BudgetsPage'
 import { ReportsPage } from './pages/ReportsPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { GroupsPage } from './pages/GroupsPage'
+import { GroupDetailPage } from './pages/GroupDetailPage'
+import { JoinGroupPage } from './pages/JoinGroupPage'
 import { useSupabaseAuth } from './auth/SupabaseAuthContext'
 import { SupabaseAuthProvider } from './auth/SupabaseAuthContext'
 
@@ -44,6 +47,9 @@ function AppRoutes() {
                         <Route path="/budgets" element={<BudgetsPage />} />
                         <Route path="/reports" element={<ReportsPage />} />
                         <Route path="/settings" element={<SettingsPage />} />
+                        <Route path="/groups" element={<GroupsPage />} />
+                        <Route path="/groups/:groupId" element={<GroupDetailPage />} />
+                        <Route path="/join/:code" element={<JoinGroupPage />} />
                       </Routes>
       </AppShell>
     )

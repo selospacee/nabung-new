@@ -38,6 +38,7 @@ const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/budgets', icon: LineChart, label: 'Budgets & Categories' },
   { to: '/reports', icon: PieChart, label: 'Reports' },
+  { to: '/groups', icon: Users, label: 'Nabung Bareng' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ]
 
@@ -177,7 +178,21 @@ export function AppShell({ children }: { children: ReactNode }) {
                     Reports
                   </NavLink>
 
-                  {/* Settings - slot 5 */}
+                  {/* Nabung Bareng - slot 5 */}
+                  <NavLink
+                    to="/groups"
+                    className={cn(
+                      'flex flex-col items-center gap-1 px-2 py-2 rounded-lg text-xs font-medium transition-colors',
+                      location.pathname.startsWith('/groups') || location.pathname.startsWith('/join')
+                        ? 'text-primary'
+                        : 'text-muted-foreground'
+                    )}
+                  >
+                    <Users className="w-5 h-5" />
+                    Bareng
+                  </NavLink>
+
+                  {/* Settings - slot 6 */}
                   <NavLink
                     to="/settings"
                     className={cn(
