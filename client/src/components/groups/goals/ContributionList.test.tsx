@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Contribution, GroupMember } from '../../../types/shared'
 import { ContributionList } from './ContributionList'
 
@@ -20,6 +20,10 @@ const members: GroupMember[] = [
   { userId: 'u1', name: 'Ayu', role: 'owner', joinedAt: '2026-11-01T00:00:00Z', leftAt: null },
   { userId: 'u2', name: 'Budi', role: 'member', joinedAt: '2026-11-01T00:00:00Z', leftAt: '2026-11-06T00:00:00Z' },
 ]
+
+afterEach(() => {
+  cleanup()
+})
 
 describe('ContributionList', () => {
   it('kosong: menampilkan pesan belum ada setoran', () => {

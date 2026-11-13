@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { cleanup, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { Contribution, GroupMember } from '../../../types/shared'
 import { ContributorBreakdown } from './ContributorBreakdown'
 
@@ -23,6 +23,10 @@ const member = (over: Partial<GroupMember>): GroupMember => ({
   joinedAt: '2026-11-01T00:00:00Z',
   leftAt: null,
   ...over,
+})
+
+afterEach(() => {
+  cleanup()
 })
 
 describe('ContributorBreakdown', () => {
