@@ -3,6 +3,9 @@
 # Typecheck memakai baseline: 5 error lama di client/src/pages/TransactionsPage.tsx
 # (lihat docs/testing.md). Job gagal bila jumlah "error TS" lebih dari BASELINE.
 # Saat error lama sudah diperbaiki, turunkan BASELINE menjadi 0 agar baseline terkunci di nol.
+#
+# Langkah typecheck dan ringkasan tes berjalan walau tes merah (if: always()),
+# supaya jumlah error tsc selalu tercetak di log.
 name: CI
 
 on:
@@ -37,9 +40,30 @@ jobs:
         run: npm ci
 
       - name: Test
-        run: npm test
+        # Reporter JSON ditulis ke file untuk ringkasan di langkah berikutnya.
+        run: npm test -- --reporter=default --reporter=json --outputFile.json=vitest-report.json
+
+      - name: Ringkasan tes gagal per file
+        if: always()
+        run: |
+          if [ ! -f vitest-report.json ]; then
+            echo "Laporan tes tidak terbentuk (vitest mungkin crash saat start)."
+            exit 0
+          fi
+          node -e "
+            const r = require('./vitest-report.json');
+            const cwd = process.cwd() + '/';
+            for (const f of r.testResults) {
+              const name = f.name.replace(cwd, '');
+              const failed = f.assertionResults.filter(a => a.status === 'failed').length;
+              if (failed > 0) console.log(failed + ' tes gagal  ' + name);
+              else if (f.status === 'failed') console.log('file gagal dimuat  ' + name);
+            }
+            console.log('Total: ' + r.numFailedTests + ' gagal dari ' + r.numTotalTests + ' tes');
+          "
 
       - name: Typecheck (hitung error vs baseline)
+        if: always()
         run: |
           npx tsc -b --noEmit 2>&1 | tee tsc.log || true
           COUNT=$(grep -c "error TS" tsc.log || true)
