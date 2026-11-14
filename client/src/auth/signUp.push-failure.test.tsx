@@ -52,6 +52,7 @@ const h = vi.hoisted(() => {
       eq: () => q,
       order: () => q,
       limit: () => q,
+      range: () => q,
       single: async () => result,
       maybeSingle: async () => result,
       then: (onFulfilled: any, onRejected: any) => Promise.resolve(result).then(onFulfilled, onRejected),
