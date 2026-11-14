@@ -1,5 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
+
+// Hook ini memakai useSupabaseAuth hanya untuk mata uang. Modul auth menarik lib/supabase,
+// yang melempar error bila env Supabase tidak ada (CI). Tes ini tidak butuh jaringan,
+// jadi konteks auth di-stub dengan user kosong (currency default IDR).
+vi.mock('../auth/SupabaseAuthContext', () => ({
+  useSupabaseAuth: () => ({ user: null }),
+}))
+
 import { useSpeechToText } from './useSpeechToText'
 
 /** Minimal stand-in for the browser SpeechRecognition API. */

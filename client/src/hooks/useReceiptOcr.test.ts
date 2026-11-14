@@ -51,7 +51,7 @@ describe('useReceiptOcr — error path (#4)', () => {
     expect(result.current.isProcessing).toBe(false)
   })
 
-  it('reports logger progress on success and never hits 100 on failure', async () => {
+  it('completes progress at 100 on success, and never reaches 100 on failure', async () => {
     recognize.mockImplementation(async (_img: unknown, _lang: unknown, opts: any) => {
       opts.logger({ status: 'recognizing text', progress: 0.42 })
       return { data: { text: 'TOKO ABC\nTotal: 50,000.00\n12/03/2024', confidence: 88 } }
@@ -65,7 +65,9 @@ describe('useReceiptOcr — error path (#4)', () => {
     expect(value.total).toBe(5_000_000)
     expect(value.date).toBe('2024-03-12')
     expect(value.confidence).toBe(88)
-    expect(result.current.progress).toBe(42)
+    // Hook menutup progres ke 100 setelah parsing selesai (setProgress(100) di useReceiptOcr.ts,
+    // ditambahkan di bdd9c21 setelah tes ini ditulis). Nilai 42 dari logger hanya perantara.
+    expect(result.current.progress).toBe(100)
     expect(result.current.error).toBeNull()
     expect(result.current.isProcessing).toBe(false)
   })
