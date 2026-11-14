@@ -154,6 +154,8 @@ const h = vi.hoisted(() => {
   const upserts: Array<{ table: string; payload: Record<string, unknown> }> = []
   const local: Record<string, Array<Record<string, unknown>>> = {}
   const behavior: { error: unknown; throwFor: string | null } = { error: null, throwFor: null }
+  // Session yang dikembalikan auth.getSession(); null = belum login.
+  const auth: { session: { user: { id: string } } | null } = { session: null }
 
   const table = (name: string) => ({
     where: () => ({
@@ -173,6 +175,9 @@ const h = vi.hoisted(() => {
   }
 
   const supabase = {
+    auth: {
+      getSession: async () => ({ data: { session: auth.session }, error: null }),
+    },
     from: (name: string) => ({
       upsert: async (payload: Record<string, unknown>) => {
         upserts.push({ table: name, payload })
@@ -182,7 +187,7 @@ const h = vi.hoisted(() => {
     }),
   }
 
-  return { upserts, local, behavior, db, supabase }
+  return { upserts, local, behavior, auth, db, supabase }
 })
 
 vi.mock('./index', () => ({ db: h.db }))
@@ -200,6 +205,8 @@ beforeEach(() => {
   h.upserts.length = 0
   h.behavior.error = null
   h.behavior.throwFor = null
+  // Default: user sudah login sebagai pemilik data yang di-push.
+  h.auth.session = { user: { id: USER } }
   for (const key of Object.keys(h.local)) delete h.local[key]
   for (const c of CASES) h.local[c.dbKey] = [{ ...c.entity }]
 })
@@ -303,6 +310,29 @@ describe('push error handling', () => {
     // Documented current behaviour: a transport-level throw aborts the remaining tables for
     // this cycle (they are retried on the next push), it is not per-table isolated.
     expect(h.upserts.map(u => u.table)).toEqual(['accounts'])
+  })
+
+  it('refuses to push when there is no session, and writes nothing', async () => {
+    h.auth.session = null
+
+    const result = await pushLocalChangesToSupabase(USER)
+
+    expect(result.success).toBe(false)
+    expect(result.errors).toEqual([{ table: 'auth', message: 'No session available' }])
+    expect(h.upserts).toHaveLength(0)
+  })
+
+  it('refuses to push rows for a userId that differs from the session user', async () => {
+    const OTHER = '11111111-2222-4333-8444-555555555555'
+    h.auth.session = { user: { id: OTHER } }
+
+    const result = await pushLocalChangesToSupabase(USER)
+
+    expect(result.success).toBe(false)
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0].table).toBe('auth')
+    expect(result.errors[0].message).toContain('Auth mismatch')
+    expect(h.upserts).toHaveLength(0)
   })
 
   it('rejects an empty or missing userId instead of writing unscoped rows', async () => {

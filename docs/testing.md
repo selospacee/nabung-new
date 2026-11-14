@@ -83,6 +83,10 @@ released from `it.fails` by that migration and is now a real passing regression 
 
 ## Known pre-existing tsc errors
 
-`npx tsc -b` reports **5 errors, all in `src/pages/TransactionsPage.tsx`**
-(171, 238, 392, 924, 1059) — unrelated to the test harness and present before it. 924/1059
-are `aiParsing` missing from the `useSpeechToText` / `useReceiptOcr` return types.
+`npx tsc -b --noEmit` reports **0 errors** on `main`. The five errors that used to sit in
+`src/pages/TransactionsPage.tsx` (171, 238, 392, 924, 1059) were fixed; CI enforces this with
+`BASELINE: 0` in `.github/workflows/ci.yml`, so any new `error TS` fails the job. Do not raise
+the baseline to hide errors.
+
+Test-harness note: `useSpeechToText` pulls `SupabaseAuthContext`, which imports `lib/supabase`
+and throws without Supabase env vars. Its test stubs `useSupabaseAuth` for that reason.

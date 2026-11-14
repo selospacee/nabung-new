@@ -43,6 +43,8 @@ const h = vi.hoisted(() => {
   const localAccounts: Array<Record<string, unknown>> = []
   const upsertError: { value: unknown } = { value: null }
   const signUpError: { value: unknown } = { value: null }
+  // Meniru session Supabase: setelah signUp berhasil, getSession mengembalikan user baru.
+  const authState = { signedIn: false }
 
   const thenable = (result: unknown) => {
     const q: any = {
@@ -79,12 +81,22 @@ const h = vi.hoisted(() => {
   })
 
   const auth = {
-    getSession: async () => ({ data: { session: null }, error: null }),
+    getSession: async () => ({
+      data: { session: authState.signedIn ? { user: { id: USER } } : null },
+      error: null,
+    }),
     getUser: async () => ({ data: { user: { id: USER, email: profileRow.email, user_metadata: { name: 'New User' } } }, error: null }),
     onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
-    signUp: async () => (signUpError.value
-      ? { data: { user: null, session: null }, error: signUpError.value }
-      : { data: { user: { id: USER, email: profileRow.email, user_metadata: {} }, session: { user: { id: USER } } }, error: null }),
+    signUp: async () => {
+      if (signUpError.value) {
+        return { data: { user: null, session: null }, error: signUpError.value }
+      }
+      authState.signedIn = true
+      return {
+        data: { user: { id: USER, email: profileRow.email, user_metadata: {} }, session: { user: { id: USER } } },
+        error: null,
+      }
+    },
     signInWithPassword: async () => ({ data: { session: { user: { id: USER } } }, error: null }),
     signOut: async () => ({ error: null }),
   }
@@ -106,7 +118,7 @@ const h = vi.hoisted(() => {
     cashiers: dexieTable('cashiers'),
   }
 
-  return { USER, NOW, profileRow, serverAccounts, upserts, inserts, localAccounts, upsertError, signUpError, db, auth, supabase: { from, auth } }
+  return { USER, NOW, profileRow, serverAccounts, upserts, inserts, localAccounts, upsertError, signUpError, authState, db, auth, supabase: { from, auth } }
 })
 
 vi.mock('../lib/supabase', () => ({ supabase: h.supabase }))
@@ -130,6 +142,7 @@ beforeEach(() => {
   h.inserts.length = 0
   h.upsertError.value = null
   h.signUpError.value = null
+  h.authState.signedIn = false
   h.localAccounts.length = 0
   // These are what sync.ts writes back into Dexie after pulling the 2 accounts created by signup.
   h.localAccounts.push(
