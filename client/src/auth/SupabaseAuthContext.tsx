@@ -50,6 +50,9 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
     const initialLoadDone = useRef(false)
     // Track if signUp is in progress to prevent premature sync from auth state change
     const signUpInProgressRef = useRef<Set<string>>(new Set())
+    // True while signUp() is running. The SIGNED_IN listener fires during signUp and would race it
+    // (polling for a profile that signUp is about to create), which left the UI stuck loading.
+    const signUpActiveRef = useRef(false)
 
   // Global safety timeout - forces isLoading=false after 20s no matter what
   useEffect(() => {
@@ -335,6 +338,7 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
       
       console.log('[Auth] Auth state change:', event, session?.user?.id)
             if (event === 'SIGNED_IN' && session?.user) {
+              if (signUpActiveRef.current) return // signUp() creates the profile itself
               // Don't fetch if we already have this user loaded, currently fetching, or already in progress
               if (loadedUserRef.current.has(session.user.id) || 
                   fetchingUserRef.current === session.user.id ||
@@ -419,6 +423,7 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
   const signUp = useCallback(async (email: string, password: string, name: string, currency: string, timezone: string) => {
       console.log('[Auth] Sign up attempt for:', email)
 
+      signUpActiveRef.current = true
       let signUpUserId: string | undefined
       // Pre-generate a temporary ID to track signUp progress before Supabase returns
       const tempSignUpId = generateUUID()
@@ -463,6 +468,7 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
                 console.warn('[Auth] Push local changes failed after login:', pushResult.errors)
               }
             }
+            signUpActiveRef.current = false
             return
           }
           throw error
@@ -569,11 +575,13 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
             // Clean up signUp in progress flag
             if (signUpUserId) {
               signUpInProgressRef.current.delete(signUpUserId)
+              signUpActiveRef.current = false
             }
           }
         }
       } catch (err) {
         console.error('[Auth] Sign up failed:', err)
+        signUpActiveRef.current = false
         // Clean up signUp in progress flag on error too
         if (signUpUserId) {
           signUpInProgressRef.current.delete(signUpUserId)

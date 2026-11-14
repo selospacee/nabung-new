@@ -7,6 +7,8 @@ export { cn }
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'default' | 'secondary' | 'outline' | 'ghost' | 'destructive' | 'success'
   size?: 'sm' | 'md' | 'lg' | 'icon'
+  /** While true the button is disabled, shows a spinner and ignores clicks (prevents double submit). */
+  loading?: boolean
   children: ReactNode
 }
 
@@ -14,6 +16,9 @@ export function Button({
   className,
   variant = 'default',
   size = 'md',
+  loading = false,
+  disabled,
+  onClick,
   children,
   ...props
 }: ButtonProps) {
@@ -36,8 +41,17 @@ export function Button({
   return (
     <button
       className={cn(base, variants[variant], sizes[size], className)}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      onClick={loading ? undefined : onClick}
       {...props}
     >
+      {loading && (
+        <span
+          aria-hidden="true"
+          className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+        />
+      )}
       {children}
     </button>
   )
