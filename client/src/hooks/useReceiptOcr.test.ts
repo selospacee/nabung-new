@@ -61,7 +61,10 @@ describe('useReceiptOcr — error path (#4)', () => {
     const { value, thrown } = await run(result.current.recognizeReceipt)
 
     expect(thrown).toBeNull()
-    expect(value.merchant).toBe('TOKO ABC')
+    // Merchant is no longer exposed: it is only used internally to guess the category.
+    // The raw OCR text still contains the store name, so assert on that instead.
+    expect('merchant' in value).toBe(false)
+    expect(value.text).toContain('TOKO ABC')
     expect(value.total).toBe(5_000_000)
     expect(value.date).toBe('2024-03-12')
     expect(value.confidence).toBe(88)

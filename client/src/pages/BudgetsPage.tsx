@@ -879,12 +879,12 @@ export function BudgetsPage() {
                   </div>
 
                   <Input
-                    label="Merchant Patterns (comma-separated)"
+                    label="Keywords (comma-separated)"
                     value={categoryForm.merchantPatterns}
                     onChange={e => setCategoryForm(f => ({ ...f, merchantPatterns: e.target.value }))}
                     placeholder="walmart, target, amazon"
                   />
-                  <p className="text-xs text-muted-foreground">Auto-categorize transactions matching these merchant names</p>
+                  <p className="text-xs text-muted-foreground">Auto-categorize transactions whose description contains these keywords</p>
                 </div>
               </div>
 

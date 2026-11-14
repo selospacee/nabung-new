@@ -10,7 +10,6 @@ interface LocatedTxn {
   longitude: number | null
   amount: number
   date: string
-  merchant?: string | null
   description?: string | null
   location?: string | null
 }
@@ -82,7 +81,7 @@ export function TxnMap({ locatedTxns, bounds, mapProvider, currency }: TxnMapPro
                 >
           <Popup>
             <div className="text-sm">
-              <p className="font-medium">{tx.merchant || tx.description || 'Transaction'}</p>
+              <p className="font-medium">{tx.description || 'Transaction'}</p>
               <p className="font-mono">{formatCurrency(tx.amount, currency)}</p>
               <p className="text-muted-foreground">{tx.date}</p>
               {tx.location && <p className="text-muted-foreground mt-1">{tx.location}</p>}

@@ -86,3 +86,23 @@ describe('useSpeechToText — amount extraction (#3)', () => {
     expect(result.current.isListening).toBe(false)
   })
 })
+
+describe('useSpeechToText — merchant is internal only', () => {
+  beforeEach(() => {
+    ;(window as any).SpeechRecognition = FakeSpeechRecognition
+    FakeSpeechRecognition.last = null
+  })
+
+  afterEach(() => {
+    delete (window as any).SpeechRecognition
+    delete (window as any).webkitSpeechRecognition
+  })
+
+  it('does not expose merchant and keeps the full spoken text as description', () => {
+    const { result } = renderHook(() => useSpeechToText([]))
+    act(() => result.current.startListening())
+    speak('makan siang kopi kenangan 30.600')
+    expect(result.current.parsed).not.toHaveProperty('merchant')
+    expect(result.current.parsed.description).toContain('kopi kenangan')
+  })
+})

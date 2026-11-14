@@ -306,6 +306,8 @@ export async function pushLocalChangesToSupabase(userId: string): Promise<PushRe
     for (const transaction of localTransactions) {
       const snakeTransaction = toSnakeCase(transaction as unknown as Record<string, unknown>)
       snakeTransaction.user_id = userId
+      // merchant is no longer written; send null so stale values on the server are cleared.
+      snakeTransaction.merchant = null
       const cleanPayload = stripToAllowedKeys(snakeTransaction, 'transactions')
       console.log('[Sync] Upserting transaction:', cleanPayload)
       const { error } = await supabase.from('transactions').upsert(cleanPayload, { onConflict: 'id' })
