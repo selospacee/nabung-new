@@ -4,11 +4,12 @@ import { formatCurrency } from '../../utils/currency'
 /**
  * Mengubah satu baris aktivitas menjadi kalimat Bahasa Indonesia.
  * `names` memetakan userId -> nama (dari anggota grup, termasuk yang sudah keluar).
+ * `currency` WAJIB: mata uang grup (groups.currency). Tidak ada default diam-diam.
  */
 export function describeActivity(
   activity: GroupActivity,
   names: Map<string, string>,
-  currency = 'IDR',
+  currency: string,
 ): string {
   const nameOf = (userId: string | null | undefined): string => {
     if (!userId) return 'Seseorang'

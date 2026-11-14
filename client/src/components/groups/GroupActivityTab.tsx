@@ -8,10 +8,12 @@ import { formatDate } from '../../utils/dates'
 interface GroupActivityTabProps {
   groupId: string
   members: GroupMember[]
+  /** Mata uang grup; dipakai untuk semua nominal di aktivitas. */
+  currency: string
 }
 
 /** Tab Aktivitas: daftar sederhana, terbaru dulu, satu kalimat per aksi. */
-export function GroupActivityTab({ groupId, members }: GroupActivityTabProps) {
+export function GroupActivityTab({ groupId, members, currency }: GroupActivityTabProps) {
   const activity = useGroupActivity(groupId)
 
   const names = useMemo(() => new Map(members.map((m) => [m.userId, m.name])), [members])
@@ -37,7 +39,7 @@ export function GroupActivityTab({ groupId, members }: GroupActivityTabProps) {
         <ul className="divide-y divide-border">
           {activity.data.map((item) => (
             <li key={item.id} className="py-3 space-y-1">
-              <p className="text-sm text-foreground">{describeActivity(item, names)}</p>
+              <p className="text-sm text-foreground">{describeActivity(item, names, currency)}</p>
               <p className="text-xs text-muted-foreground">{formatDate(item.createdAt)}</p>
             </li>
           ))}

@@ -106,7 +106,7 @@ export function GroupDetailPage() {
         </TabsContent>
 
         <TabsContent value="activity" className="mt-4">
-          <GroupActivityTab groupId={current.id} members={members.data} />
+          <GroupActivityTab groupId={current.id} members={members.data} currency={current.currency} />
         </TabsContent>
       </Tabs>
 
