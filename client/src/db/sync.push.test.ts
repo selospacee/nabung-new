@@ -179,10 +179,19 @@ const h = vi.hoisted(() => {
       getSession: async () => ({ data: { session: auth.session }, error: null }),
     },
     from: (name: string) => ({
-      upsert: async (payload: Record<string, unknown>) => {
+      // Meniru builder PostgREST: `await upsert(...)` atau `upsert(...).select('id').single()`.
+      upsert: (payload: Record<string, unknown>) => {
         upserts.push({ table: name, payload })
-        if (behavior.throwFor === name) throw new TypeError('Failed to fetch')
-        return { error: behavior.error }
+        const run = async () => {
+          if (behavior.throwFor === name) throw new TypeError('Failed to fetch')
+          return { error: behavior.error }
+        }
+        const result = run()
+        return Object.assign(result, {
+          select: () => ({
+            single: async () => ({ ...(await result), data: { id: payload.id } }),
+          }),
+        })
       },
     }),
   }

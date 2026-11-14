@@ -52,6 +52,7 @@ const h = vi.hoisted(() => {
       eq: () => q,
       order: () => q,
       limit: () => q,
+      range: () => q,
       single: async () => result,
       maybeSingle: async () => result,
       then: (onFulfilled: any, onRejected: any) => Promise.resolve(result).then(onFulfilled, onRejected),
@@ -72,9 +73,13 @@ const h = vi.hoisted(() => {
       inserts.push({ table, payload })
       return { error: null }
     },
-    upsert: async (payload: Record<string, unknown>) => {
+    // Meniru builder PostgREST: `await upsert(...)` atau `upsert(...).select('id').single()`.
+    upsert: (payload: Record<string, unknown>) => {
       upserts.push({ table, payload })
-      return { error: table === 'accounts' ? upsertError.value : null }
+      const error = table === 'accounts' ? upsertError.value : null
+      return Object.assign(Promise.resolve({ error }), {
+        select: () => ({ single: async () => ({ data: { id: payload.id }, error }) }),
+      })
     },
     update: () => thenable({ data: null, error: null }),
     delete: () => thenable({ data: null, error: null }),

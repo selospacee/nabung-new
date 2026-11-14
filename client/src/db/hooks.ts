@@ -168,6 +168,15 @@ export function useBudgets(userId?: string | null, yearMonth?: string) {
   }, [userId, yearMonth])
 }
 
+// All budgets for the user (every month). The page filters by month itself, and carry-over needs previous months.
+export function useAllBudgets(userId?: string | null) {
+  return useLiveQuery(async () => {
+    if (!userId) userId = getCurrentUser()
+    if (!userId) return []
+    return db.budgets.where('userId').equals(userId).toArray()
+  }, [userId])
+}
+
 export function useBudgetsByCategory(categoryId: string, yearMonth?: string) {
   const budgets = useBudgets(undefined, yearMonth)
   return useMemo(() => {

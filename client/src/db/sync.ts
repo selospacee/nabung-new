@@ -22,6 +22,47 @@ function toSnakeCase(obj: Record<string, unknown>): Record<string, unknown> {
   return result
 }
 
+// PostgREST returns at most 1000 rows per request, so page through the table.
+async function fetchAllRows(table: string, userId: string, orderBy: string): Promise<Record<string, any>[]> {
+  const PAGE = 1000
+  const rows: Record<string, any>[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from(table)
+      .select('*')
+      .eq('user_id', userId)
+      .order(orderBy, { ascending: true })
+      .range(from, from + PAGE - 1)
+    if (error) throw error
+    rows.push(...(data || []))
+    if (!data || data.length < PAGE) break
+  }
+  return rows
+}
+
+// Server row -> local Transaction. Server dates are timestamptz; local code uses 'YYYY-MM-DD'.
+function mapTransactionRow(row: Record<string, any>): Transaction {
+  const t = toCamelCase(row) as unknown as Transaction
+  return {
+    ...t,
+    date: typeof row.date === 'string' ? row.date.slice(0, 10) : t.date,
+    amount: Number(row.amount),
+    latitude: row.latitude == null ? null : Number(row.latitude),
+    longitude: row.longitude == null ? null : Number(row.longitude),
+    cashierId: row.cashier_id ?? null,
+    categoryId: row.category_id ?? null,
+    description: row.description ?? '',
+    merchant: row.merchant ?? '',
+    notes: row.notes ?? '',
+    receiptImage: row.receipt_image ?? null,
+    receiptOcrText: row.receipt_ocr_text ?? null,
+    location: row.location ?? null,
+    createdAt: row.created_at ?? new Date().toISOString(),
+    updatedAt: row.updated_at ?? row.created_at ?? new Date().toISOString(),
+    deletedAt: row.deleted_at ?? null,
+  }
+}
+
 function validateUserId(userId: unknown): asserts userId is string {
   if (!userId || typeof userId !== 'string' || userId.trim() === '') {
     throw new Error('[Sync] Invalid userId: must be a non-empty string')
@@ -81,6 +122,27 @@ export async function syncUserDataFromSupabase(userId: string): Promise<void> {
       console.log('[Sync] Synced', accountsData.length, 'accounts')
     }
 
+    // 2b. Sync Transactions (includes soft-deleted rows so deletes propagate to other devices)
+    const remoteTransactions = await fetchAllRows('transactions', userId, 'created_at')
+    if (remoteTransactions.length > 0) {
+      const ids = remoteTransactions.map(r => r.id as string)
+      const localById = new Map(
+        (await db.transactions.bulkGet(ids))
+          .filter((t): t is Transaction => !!t)
+          .map(t => [t.id, t] as const)
+      )
+      const toPut: Transaction[] = []
+      for (const row of remoteTransactions) {
+        const remote = mapTransactionRow(row)
+        const local = localById.get(remote.id)
+        // Keep local edits that have not reached the server yet (last write wins by updatedAt).
+        if (local && Date.parse(local.updatedAt) > Date.parse(remote.updatedAt)) continue
+        toPut.push(remote)
+      }
+      if (toPut.length > 0) await db.transactions.bulkPut(toPut)
+      console.log('[Sync] Synced', toPut.length, 'of', remoteTransactions.length, 'transactions')
+    }
+
     // 3. Sync Categories
     const { data: categories, error: categoriesError } = await supabase
       .from('categories')
@@ -105,8 +167,13 @@ export async function syncUserDataFromSupabase(userId: string): Promise<void> {
     if (budgetsError) throw budgetsError
     
     if (budgets && budgets.length > 0) {
-      const budgetsData = budgets.map(toCamelCase) as unknown as Budget[]
-      await db.budgets.bulkPut(budgetsData)
+      const localBudgets = new Map((await db.budgets.toArray()).map(b => [b.id, b] as const))
+      const budgetsData = (budgets.map(toCamelCase) as unknown as Budget[]).filter(remote => {
+        const local = localBudgets.get(remote.id)
+        // Keep local edits that have not reached the server yet (local is newer).
+        return !(local?.updatedAt && remote.updatedAt && Date.parse(local.updatedAt) > Date.parse(remote.updatedAt))
+      })
+      if (budgetsData.length > 0) await db.budgets.bulkPut(budgetsData)
       console.log('[Sync] Synced', budgetsData.length, 'budgets')
     }
 
@@ -255,11 +322,22 @@ export async function pushLocalChangesToSupabase(userId: string): Promise<PushRe
       const snakeBudget = toSnakeCase(budget as unknown as Record<string, unknown>)
       snakeBudget.user_id = userId
       const cleanPayload = stripToAllowedKeys(snakeBudget, 'budgets')
-      const { error } = await supabase.from('budgets').upsert(cleanPayload, { onConflict: 'id' })
+      // One budget per (user, category, month). If the server already has that row under another id
+      // (e.g. created on another device), update it and adopt its id locally instead of failing with 409.
+      const { data: saved, error } = await supabase
+        .from('budgets')
+        .upsert(cleanPayload, { onConflict: 'user_id,category_id,year_month' })
+        .select('id')
+        .single()
       if (error) {
         const msg = formatSupabaseError(error)
         console.error('[Sync] Push budget error:', msg)
         errors.push({ table: 'budgets', message: msg })
+        continue
+      }
+      if (saved?.id && saved.id !== budget.id) {
+        await db.budgets.delete(budget.id)
+        await db.budgets.put({ ...budget, id: saved.id as string })
       }
     }
 
