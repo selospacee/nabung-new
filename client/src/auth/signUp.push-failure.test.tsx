@@ -107,6 +107,7 @@ const h = vi.hoisted(() => {
   }
 
   const dexieTable = (name: string) => ({
+    bulkGet: async (ids: unknown[]) => ids.map(() => undefined),
     bulkPut: async () => {},
     where: () => ({
       equals: () => ({ toArray: async () => (name === 'accounts' ? localAccounts : []) }),
@@ -114,6 +115,8 @@ const h = vi.hoisted(() => {
   })
 
   const db = {
+    // Meniru Dexie: penulisan dari pull berjalan di dalam transaksi.
+    transaction: async (_mode: string, _tables: unknown, fn: (tx: object) => unknown) => fn({}),
     users: { put: async () => {} },
     accounts: dexieTable('accounts'),
     categories: dexieTable('categories'),
