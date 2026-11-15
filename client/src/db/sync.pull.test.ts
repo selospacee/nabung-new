@@ -30,9 +30,14 @@ const h = vi.hoisted(() => {
       store[name]?.set(row.id, row)
     },
     toArray: async () => Array.from(store[name]?.values() ?? []),
-    where: () => ({ equals: () => ({ toArray: async () => Array.from(store[name]?.values() ?? []) }) }),
+    where: (index: string) => ({
+      equals: (value: unknown) => ({
+        toArray: async () => Array.from(store[name]?.values() ?? []).filter(r => r[index] === value),
+      }),
+    }),
   })
   const db = {
+    transaction: async (_mode: string, _tables: unknown, fn: (tx: object) => unknown) => fn({}),
     users: { put: noop },
     accounts: { bulkPut: noop },
     categories: { bulkPut: noop },

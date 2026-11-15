@@ -153,16 +153,24 @@ const CASES: PushCase[] = [
 const h = vi.hoisted(() => {
   const upserts: Array<{ table: string; payload: Record<string, unknown> }> = []
   const local: Record<string, Array<Record<string, unknown>>> = {}
+  // Versi server per tabel, untuk pengecekan LWW sebelum push.
+  const server: Record<string, Array<Record<string, unknown>>> = {}
   const behavior: { error: unknown; throwFor: string | null } = { error: null, throwFor: null }
   // Session yang dikembalikan auth.getSession(); null = belum login.
   const auth: { session: { user: { id: string } } | null } = { session: null }
 
   const table = (name: string) => ({
-    where: () => ({
+    where: (index: string) => ({
       equals: (value: unknown) => ({
-        toArray: async () => (local[name] ?? []).filter(row => row.userId === value),
+        toArray: async () => (local[name] ?? []).filter(row => row[index] === value),
       }),
     }),
+    get: async (id: string) => (local[name] ?? []).find(row => row.id === id),
+    update: async (id: string, changes: Record<string, unknown>) => {
+      const row = (local[name] ?? []).find(r => r.id === id)
+      if (row) Object.assign(row, changes)
+      return row ? 1 : 0
+    },
   })
 
   const db = {
@@ -179,6 +187,11 @@ const h = vi.hoisted(() => {
       getSession: async () => ({ data: { session: auth.session }, error: null }),
     },
     from: (name: string) => ({
+      select: () => ({
+        eq: () => ({
+          in: async () => ({ data: server[name] ?? [], error: null }),
+        }),
+      }),
       // Meniru builder PostgREST: `await upsert(...)` atau `upsert(...).select('id').single()`.
       upsert: (payload: Record<string, unknown>) => {
         upserts.push({ table: name, payload })
@@ -196,7 +209,7 @@ const h = vi.hoisted(() => {
     }),
   }
 
-  return { upserts, local, behavior, auth, db, supabase }
+  return { upserts, local, server, behavior, auth, db, supabase }
 })
 
 vi.mock('./index', () => ({ db: h.db }))
@@ -217,7 +230,9 @@ beforeEach(() => {
   // Default: user sudah login sebagai pemilik data yang di-push.
   h.auth.session = { user: { id: USER } }
   for (const key of Object.keys(h.local)) delete h.local[key]
-  for (const c of CASES) h.local[c.dbKey] = [{ ...c.entity }]
+  for (const key of Object.keys(h.server)) delete h.server[key]
+  // Baris yang akan di-push adalah baris dirty (penanda _dirty = 1 dari hook stempel).
+  for (const c of CASES) h.local[c.dbKey] = [{ ...c.entity, _dirty: 1 }]
 })
 
 describe.each(CASES)('push payload for $table', (spec) => {
