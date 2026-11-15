@@ -75,6 +75,7 @@ export function DashboardPage() {
     if (!stats || !categoriesAll) return []
     return Object.entries(stats.byCategory)
       .map(([catId, vals]) => {
+        const cat = categoriesAll.find(c => c.id === catId)
         return {
           name: catId === 'uncategorized' ? 'Uncategorized' : refLabel(categoriesAll, catId, 'kategori'),
           value: vals.expense,

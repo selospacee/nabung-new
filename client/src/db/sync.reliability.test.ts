@@ -165,9 +165,9 @@ const h = vi.hoisted(() => {
         return q
       },
       single: async () => {
-        const { data } = exec()
-        return data[0]
-          ? { data: data[0], error: null }
+        const first = exec().data?.[0]
+        return first
+          ? { data: first, error: null }
           : { data: null, error: { code: 'PGRST116', message: 'no rows' } }
       },
       then: (ok: any, bad: any) => Promise.resolve(exec()).then(ok, bad),
@@ -253,7 +253,8 @@ function makeDevice(label: string) {
   }
   dev.db = {
     ...tables,
-    transaction: async (_mode: string, _tables: unknown, fn: (tx: object) => unknown) => {
+    transaction: async (...args: unknown[]) => {
+      const fn = args[args.length - 1] as (tx: object) => unknown
       const prev = dev.currentTx
       const tx = {}
       dev.currentTx = tx
@@ -557,7 +558,7 @@ describe('label referensi tidak membuang transaksi', () => {
     const txs = (await db.transactions.toArray()).filter((t: Row) => !t.deletedAt)
     const accountsAll = await db.accounts.toArray()
     const categoriesAll = await db.categories.toArray()
-    const lines = txs.map((t: Row) => ({
+    const lines: Array<{ id: string; account: string; category: string }> = txs.map((t: Row) => ({
       id: t.id,
       account: refLabel(accountsAll, t.accountId, 'akun'),
       category: t.categoryId ? refLabel(categoriesAll, t.categoryId, 'kategori') : '',
@@ -587,6 +588,7 @@ describe('pull bertahap', () => {
   it('pull pertama penuh, pull berikutnya delta', async () => {
     on(devA).transactions.add(txRow(1))
     await pushLocalChangesToSupabase(USER)
+    h.server.log.length = 0
     on(devB)
     await syncUserDataFromSupabase(USER)
     expect(h.server.log.filter(l => l.table === 'transactions').map(l => l.mode)).toEqual(['full'])
@@ -680,20 +682,20 @@ describe('pull bertahap', () => {
 
 describe('gema realtime', () => {
   it('event untuk perubahan yang sudah tercakup pull diabaikan; event baru memicu pull', async () => {
-    on(devA).transactions.add(txRow(6, { updated_at: at(60) }))
+    on(devA).transactions.add(txRow(6))
     await pushLocalChangesToSupabase(USER)
     on(devB)
-    await syncUserDataFromSupabase(USER) // kursor transactions = at(60)
+    await syncUserDataFromSupabase(USER) // kursor transactions = updated_at server (at(0))
 
     const trigger = vi.fn()
     subscribeRealtime(USER, trigger, 400)
     const onChange = lastChannel().handlers[0].cb
 
-    onChange({ table: 'transactions', new: { updated_at: at(30) } }) // gema: sudah tercakup
+    onChange({ table: 'transactions', new: { updated_at: at(0) } }) // gema: sudah tercakup
     await vi.advanceTimersByTimeAsync(500)
     expect(trigger).not.toHaveBeenCalled()
 
-    onChange({ table: 'transactions', new: { updated_at: at(90) } }) // baru
+    onChange({ table: 'transactions', new: { updated_at: at(30) } }) // baru
     await vi.advanceTimersByTimeAsync(500)
     expect(trigger).toHaveBeenCalledWith('realtime')
   })
