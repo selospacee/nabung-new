@@ -187,10 +187,8 @@ export async function pullFromServer(userId: string): Promise<PullResult> {
       passwordHash: userData.passwordHash || '',
       time: userData.time || userData.createdAt || new Date().toISOString(),
     }
-    await db.transaction('rw', db.users, async tx => {
-      markRemoteTx(tx)
-      await db.users.put(user)
-    })
+    // users tidak memiliki hook stempel, jadi penulisan langsung cukup.
+    await db.users.put(user)
   }
 
   // 2. Tabel yang disinkronkan (termasuk baris soft-delete supaya penghapusan sampai ke perangkat lain)
