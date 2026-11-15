@@ -218,6 +218,8 @@ async function pullTable(spec: SyncTableSpec, userId: string, nowMs: number): Pr
   }
   return conflicts
 }
+
+export function validateUserId(userId: unknown): asserts userId is string {
   if (!userId || typeof userId !== 'string' || userId.trim() === '') {
     throw new Error('[Sync] Invalid userId: must be a non-empty string')
   }
