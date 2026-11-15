@@ -1,7 +1,8 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { v4 as uuid } from 'uuid'
-import { useCurrentUser, useTransactions, useAccounts, useCategories, useDefaultAccount, useAccountBalances } from '../db/hooks'
+import { useCurrentUser, useTransactions, useAccounts, useCategories, useAccountsWithDeleted, useCategoriesWithDeleted, useDefaultAccount, useAccountBalances } from '../db/hooks'
+import { refLabel } from '../db/refs'
 import { cn, Card, CardHeader, CardTitle, CardContent, Button, Badge, Dialog, Input, Select, Textarea, EmptyState, Skeleton, Tabs, Alert } from '../components/ui'
 import { formatCurrency, centsToDisplay, centsToDisplaySigned, displayToCents } from '../utils/currency'
 import { formatDate, toISODate } from '../utils/dates'
@@ -41,6 +42,8 @@ export function TransactionsPage() {
   const { user, userId } = useCurrentUser()
   const accounts = useAccounts(userId)
   const categories = useCategories(userId)
+  const accountsAll = useAccountsWithDeleted(userId)
+  const categoriesAll = useCategoriesWithDeleted(userId)
   const defaultAccount = useDefaultAccount()
   const transactions = useTransactions(userId)
   const balances = useAccountBalances(userId)
@@ -694,8 +697,9 @@ export function TransactionsPage() {
       ) : (
         <div className="space-y-1">
           {filteredTxns.map(tx => {
-            const cat = categories?.find(c => c.id === tx.categoryId)
-            const account = accounts?.find(a => a.id === tx.accountId)
+            // Lookup memakai daftar yang memuat baris terhapus: transaksi tidak pernah hilang karena referensinya.
+            const cat = categoriesAll?.find(c => c.id === tx.categoryId)
+            const account = accountsAll?.find(a => a.id === tx.accountId)
             const isIncome = tx.type === 'income'
             const isExpense = tx.type === 'expense'
 
@@ -724,17 +728,17 @@ export function TransactionsPage() {
                         {tx.description && tx.description !== tx.merchant && tx.description}
                       </p>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        {cat && (
+                        {tx.categoryId && (
                           <Badge
                             variant={tx.type === 'income' ? 'income' : tx.type === 'expense' ? 'expense' : 'secondary'}
                             className="text-[10px]"
                           >
-                            <span className="inline-flex w-1.5 h-1.5 rounded-full mr-1" style={{ backgroundColor: cat.color }} />
-                            {cat.name}
+                            <span className="inline-flex w-1.5 h-1.5 rounded-full mr-1" style={{ backgroundColor: cat?.color ?? '#6B7280' }} />
+                            {refLabel(categoriesAll, tx.categoryId, 'kategori')}
                           </Badge>
                         )}
                         <span className="text-xs text-muted-foreground">
-                          {formatDate(tx.date)} {(account || defaultAccount) && `· ${(account || defaultAccount)?.name}`}
+                          {formatDate(tx.date)} {(tx.accountId || defaultAccount) && `· ${tx.accountId ? refLabel(accountsAll, tx.accountId, 'akun') : defaultAccount?.name}`}
                         </span>
                       </div>
                     </div>

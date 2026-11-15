@@ -4,6 +4,12 @@
  */
 import { supabase } from '../lib/supabase'
 import { patchSyncState } from './syncStatus'
+import { isCovered } from './syncCore'
+
+interface ChangePayload {
+  table?: string
+  new?: { updated_at?: string } | null
+}
 
 /** Tabel yang dipublikasikan ke supabase_realtime. cashiers tidak ada di publikasi: andalkan polling. */
 export const REALTIME_TABLES = ['accounts', 'categories', 'transactions', 'budgets', 'savings_goals'] as const
@@ -14,7 +20,11 @@ export function subscribeRealtime(
   debounceMs = 400,
 ): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null
-  const onChange = () => {
+  const onChange = (payload?: ChangePayload) => {
+    // Gema tulisan sendiri (atau perubahan yang sudah tercakup pull) tidak perlu memicu pull.
+    const table = payload?.table
+    const updatedAt = payload?.new?.updated_at
+    if (table && updatedAt && isCovered(userId, table, updatedAt)) return
     if (timer) clearTimeout(timer)
     timer = setTimeout(() => {
       timer = null

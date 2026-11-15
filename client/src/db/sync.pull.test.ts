@@ -38,6 +38,8 @@ const h = vi.hoisted(() => {
   })
   const db = {
     transaction: async (_mode: string, _tables: unknown, fn: (tx: object) => unknown) => fn({}),
+    // Penanda pull bertahap: kosong = pull penuh.
+    syncMeta: { get: async () => undefined, put: async () => {} },
     users: { put: noop },
     accounts: { bulkPut: noop },
     categories: { bulkPut: noop },
