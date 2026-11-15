@@ -349,7 +349,7 @@ export function DashboardPage() {
                       </div>
                       <div>
                         <p className="text-sm font-medium text-foreground">
-                          {tx.merchant || tx.description || 'Transaction'}
+                          {tx.description || 'Transaction'}
                         </p>
                         <div className="flex items-center gap-2 mt-0.5">
                           {tx.categoryId && (

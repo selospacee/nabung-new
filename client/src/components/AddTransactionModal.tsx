@@ -21,7 +21,6 @@ interface NewTx {
   date: string
   categoryId: string | null
   accountId: string
-  merchant: string
   description: string
   notes: string
   receiptImage: string | null
@@ -37,7 +36,6 @@ interface FormState {
   date: string
   categoryId: string
   accountId: string
-  merchant: string
   description: string
   notes: string
   receiptImage: string | null
@@ -53,7 +51,6 @@ const emptyForm = (accountId: string): FormState => ({
   date: toISODate(new Date()),
   categoryId: '',
   accountId,
-  merchant: '',
   description: '',
   notes: '',
   receiptImage: null,
@@ -219,7 +216,6 @@ export function AddTransactionModal({
       amount: ocrResult.total ? String(ocrResult.total / 100) : '',
       date: ocrResult.date || toISODate(new Date()),
       categoryId: pickCategoryId(categories, ocrResult.suggestedType || 'expense', ocrResult.suggestedCategoryId),
-      merchant: '',
       description: '',
       receiptImage,
       receiptOcrText: ocrResult.text ?? null,
@@ -239,7 +235,6 @@ export function AddTransactionModal({
       amount: p.amount ? String(p.amount / 100) : '',
       date: p.date || toISODate(new Date()),
       categoryId: pickCategoryId(categories, p.suggestedType || 'expense', p.suggestedCategoryId),
-      merchant: '',
       description: p.description || '',
       receiptImage: null,
       receiptOcrText: null,
@@ -265,7 +260,6 @@ export function AddTransactionModal({
       type: tx.type,
       date: tx.date,
       description: tx.description || '',
-      merchant: tx.merchant || '',
       notes: tx.notes || '',
       receiptImage: tx.receiptImage || null,
       receiptOcrText: tx.receiptOcrText || null,
@@ -287,7 +281,6 @@ export function AddTransactionModal({
       date: ocrResult.date,
       categoryId: pickCategoryId(categories, ocrResult.suggestedType || 'expense', ocrResult.suggestedCategoryId) || null,
       accountId: defaultAccountId,
-      merchant: '',
       description: '',
       notes: '',
       receiptImage,
@@ -313,7 +306,6 @@ export function AddTransactionModal({
       date: p.date,
       categoryId: pickCategoryId(categories, p.suggestedType || 'expense', p.suggestedCategoryId) || null,
       accountId: defaultAccountId,
-      merchant: '',
       description: p.description || '',
       notes: '',
       receiptImage: null,
@@ -341,7 +333,6 @@ export function AddTransactionModal({
         date: form.date,
         categoryId: form.categoryId,
         accountId: form.accountId,
-        merchant: '',
         description: form.description,
         notes: form.notes,
         receiptImage: form.receiptImage,

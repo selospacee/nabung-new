@@ -203,10 +203,10 @@ export function ReportsPage() {
                 const needsQuote = s.includes(',') || s.includes('"') || s.includes('\n')
                 return needsQuote ? '"' + s.replace(/"/g, '""') + '"' : s
               }
-              const header = 'Date,Merchant,Description,Category,Type,Amount,Account,Location,Latitude,Longitude\n'
+              const header = 'Date,Description,Category,Type,Amount,Account,Location,Latitude,Longitude\n'
               const rows = filteredTxns.map(tx => {
                 const catName = tx.categoryId ? refLabel(categoriesAll, tx.categoryId, 'kategori') : 'Uncategorized'
-                return `${escape(tx.date)},${escape(tx.merchant)},${escape(tx.description)},${escape(catName)},${escape(tx.type)},${escape(tx.amount)},${escape(tx.accountId)},${escape(tx.location || '')},${escape(tx.latitude ?? '')},${escape(tx.longitude ?? '')}`
+                return `${escape(tx.date)},${escape(tx.description)},${escape(catName)},${escape(tx.type)},${escape(tx.amount)},${escape(tx.accountId)},${escape(tx.location || '')},${escape(tx.latitude ?? '')},${escape(tx.longitude ?? '')}`
               }).join('\n')
               const blob = new Blob([header + rows], { type: 'text/csv' })
               const url = URL.createObjectURL(blob)

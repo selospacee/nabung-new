@@ -292,7 +292,7 @@ export function CategoriesPage() {
               </div>
 
               <Input
-                label="Merchant Patterns (comma-separated)"
+                label="Keywords (comma-separated)"
                 value={form.merchantPatterns}
                 onChange={e => setForm(f => ({ ...f, merchantPatterns: e.target.value }))}
                 placeholder="e.g. restaurant, cafe, food"

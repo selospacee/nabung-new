@@ -271,6 +271,12 @@ describe.each(CASES)('push payload for $table', (spec) => {
     expect(payloadFor(spec.table).user_id).toBe(USER)
   })
 
+  // merchant was removed from the UI; the push must no longer send a value for it.
+  it('sends merchant as null for transactions (no longer written)', () => {
+    if (spec.table !== 'transactions') return
+    expect(payloadFor(spec.table).merchant).toBeNull()
+  })
+
   it('strips Dexie-only fields before upserting', () => {
     const payload = payloadFor(spec.table)
     for (const junk of spec.junkKeys) {

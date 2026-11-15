@@ -162,9 +162,8 @@ export function useTransactions(userId?: string | null, filters?: {
     if (filters?.search) {
       const q = filters.search.toLowerCase()
       filtered = filtered.filter(t =>
-        t.description.toLowerCase().includes(q) ||
-        t.merchant?.toLowerCase().includes(q)
-      )
+        t.description.toLowerCase().includes(q)
+        )
     }
 
     return filtered.sort((a, b) => b.date.localeCompare(a.date))

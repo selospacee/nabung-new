@@ -3,7 +3,6 @@ import type { Category } from '../types'
 export interface ParsedTransaction {
   amount: number | null
   date: string | null
-  merchant: string
   description: string
   suggestedCategoryId: string | null
   suggestedType: 'income' | 'expense' | 'transfer'
@@ -13,7 +12,6 @@ export interface ParsedTransaction {
 }
 
 export interface ReceiptParsedData {
-  merchant: string | null
   total: number | null
   date: string | null
   suggestedType: 'income' | 'expense' | 'transfer'
@@ -146,7 +144,6 @@ export async function parseVoiceWithAI(
     return {
       amount: parsed.amount ?? null,
       date: parsed.date ?? new Date().toISOString().split('T')[0],
-      merchant: parsed.merchant ?? '',
       description: parsed.description ?? '',
       suggestedCategoryId: parsed.suggestedCategoryId ?? null,
       suggestedType: parsed.suggestedType ?? 'expense',
@@ -188,7 +185,6 @@ export async function parseReceiptWithAI(
     const parsed = JSON.parse(response)
     console.log('[AI Parser] Parsed receipt:', parsed)
     return {
-      merchant: parsed.merchant ?? null,
       total: parsed.total ?? null,
       date: parsed.date ?? null,
       suggestedType: parsed.suggestedType ?? 'expense',
