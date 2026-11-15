@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { Button, Input } from '../ui'
 import { joinGroupByCode, toSharedSavingsError, SharedSavingsError } from '../../lib/sharedSavings'
+import { normalizeInviteCode } from '../../utils/sharedGoals'
 
 interface JoinGroupFormProps {
   /** Dipanggil dengan id grup setelah berhasil bergabung (atau sudah menjadi anggota). */
@@ -15,21 +16,27 @@ export function JoinGroupForm({ onJoined, initialCode = '', autoFocus = false }:
   const [code, setCode] = useState(initialCode)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<SharedSavingsError | null>(null)
+  const busyRef = useRef(false)
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!code.trim()) {
+    const normalized = normalizeInviteCode(code)
+    if (!normalized) {
       setError(new SharedSavingsError('INVITE_INVALID'))
       return
     }
+    // Guard di ref: dua submit dalam satu render tidak mengirim dua permintaan.
+    if (busyRef.current) return
+    busyRef.current = true
     setBusy(true)
     setError(null)
     try {
-      const groupId = await joinGroupByCode(code)
+      const groupId = await joinGroupByCode(normalized)
       onJoined(groupId)
     } catch (err) {
       setError(toSharedSavingsError(err))
     } finally {
+      busyRef.current = false
       setBusy(false)
     }
   }

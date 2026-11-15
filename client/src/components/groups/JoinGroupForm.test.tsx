@@ -38,7 +38,8 @@ describe('JoinGroupForm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Gabung' }))
 
     await waitFor(() => expect(onJoined).toHaveBeenCalledWith('grup-1'))
-    expect(joinMock).toHaveBeenCalledWith('1a2b3c4d')
+    // Kode dinormalisasi (huruf besar) sebelum dikirim ke server.
+    expect(joinMock).toHaveBeenCalledWith('1A2B3C4D')
   })
 
   it('tidak memanggil server saat kode kosong', () => {
@@ -46,5 +47,38 @@ describe('JoinGroupForm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Gabung' }))
     expect(joinMock).not.toHaveBeenCalled()
     expect(screen.getByText('Kode undangan tidak ditemukan. Periksa kembali kodenya.')).toBeTruthy()
+  })
+})
+
+describe('JoinGroupForm normalisasi kode', () => {
+  beforeEach(() => joinMock.mockReset())
+  afterEach(() => cleanup())
+
+  it('membuang spasi di tengah dan membesarkan huruf sebelum dikirim', async () => {
+    joinMock.mockResolvedValueOnce('grup-2')
+    const onJoined = vi.fn()
+    render(<JoinGroupForm onJoined={onJoined} />)
+
+    fireEvent.change(screen.getByLabelText('Kode undangan'), { target: { value: '  1a2b 3c4d ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Gabung' }))
+
+    await waitFor(() => expect(onJoined).toHaveBeenCalledWith('grup-2'))
+    expect(joinMock).toHaveBeenCalledWith('1A2B3C4D')
+  })
+
+  it('dua submit cepat hanya mengirim satu permintaan', async () => {
+    let resolve: (id: string) => void = () => {}
+    joinMock.mockReturnValueOnce(new Promise<string>((r) => { resolve = r }))
+    const onJoined = vi.fn()
+    render(<JoinGroupForm onJoined={onJoined} />)
+
+    fireEvent.change(screen.getByLabelText('Kode undangan'), { target: { value: '1A2B3C4D' } })
+    const form = screen.getByRole('button', { name: 'Gabung' }).closest('form')!
+    fireEvent.submit(form)
+    fireEvent.submit(form)
+
+    expect(joinMock).toHaveBeenCalledTimes(1)
+    resolve('grup-3')
+    await waitFor(() => expect(onJoined).toHaveBeenCalledWith('grup-3'))
   })
 })

@@ -25,7 +25,7 @@ export function GroupGoalsTab({ groupId }: GroupGoalsTabProps) {
   const [dialog, setDialog] = useState<DialogState>(null)
 
   const groupData = group.data
-  const currency = groupData?.currency ?? 'IDR'
+  // Tidak ada fallback mata uang: nominal baru ditampilkan setelah grup (dan mata uangnya) termuat.
   const groupType = groupData?.type ?? null
 
   const activeMembers = members.data.filter((m) => m.leftAt === null)
@@ -57,7 +57,9 @@ export function GroupGoalsTab({ groupId }: GroupGoalsTabProps) {
         <p className="text-sm text-slate-500">Grup tidak ditemukan atau tidak bisa dilihat.</p>
       )}
 
-      {goals.loading ? (
+      {!groupData ? (
+        group.loading ? <p className="text-sm text-slate-500">Memuat goal…</p> : null
+      ) : goals.loading ? (
         <p className="text-sm text-slate-500">Memuat goal…</p>
       ) : items.length === 0 ? (
         <p className="text-sm text-slate-500">Belum ada goal. Buat goal pertama untuk grup ini.</p>
@@ -68,7 +70,7 @@ export function GroupGoalsTab({ groupId }: GroupGoalsTabProps) {
               key={goal.id}
               goal={goal}
               progress={progress}
-              currency={currency}
+              currency={groupData.currency}
               members={members.data}
               userId={userId}
               isActiveMember={isActiveMember}
@@ -90,7 +92,7 @@ export function GroupGoalsTab({ groupId }: GroupGoalsTabProps) {
         <GoalFormDialog
           groupId={groupId}
           groupType={groupData.type}
-          currency={currency}
+          currency={groupData.currency}
           members={activeMembers}
           goal={null}
           canManage={false}
@@ -103,7 +105,7 @@ export function GroupGoalsTab({ groupId }: GroupGoalsTabProps) {
         <GoalFormDialog
           groupId={groupId}
           groupType={groupData.type}
-          currency={currency}
+          currency={groupData.currency}
           members={activeMembers}
           goal={dialog.goal}
           canManage={canManageGoal({
