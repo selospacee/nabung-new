@@ -23,6 +23,14 @@ Runner: vitest 5 + jsdom + `@testing-library/react`. Config: `client/vitest.conf
 | `src/db/sync.push.test.ts` | **push payload contract** — every upsert payload is validated against the live schema; push error handling |
 | `src/db/schema-drift.test.ts` | `supabase-schema.sql` vs the live database (stale-artifact detector) |
 | `src/auth/signUp.push-failure.test.tsx` | **regression** — signup must survive a failing background push |
+| `src/utils/sharedGoals.test.ts` | Nabung Bareng: progres, izin goal/setoran (cermin RLS), validasi nominal & tanggal, normalisasi kode undangan |
+| `src/components/groups/activityText.test.ts` | kalimat aktivitas per aksi, mata uang grup, pengelompokan per hari, jam lokal |
+| `src/components/groups/ActivityFeed.test.tsx` | feed aktivitas: kelompok hari, "Muat lebih banyak" memakai cursor dari baris terakhir, galat muat |
+| `src/components/groups/JoinGroupForm.test.tsx` | form gabung: normalisasi kode, galat kode salah, dua submit cepat = satu permintaan |
+| `src/components/groups/goals/GoalFormDialog.test.tsx` | goal: validasi nominal (0, negatif, > Rp 10 T), minimal satu peserta, klik ganda, goal baru tidak dibuat ulang saat peserta gagal, hanya-baca |
+| `src/components/groups/goals/ContributionFormDialog.test.tsx` | setoran: validasi, buat/ubah/hapus, konfirmasi hapus, klik ganda |
+| `src/components/groups/goals/GoalCard.test.tsx` | tombol sesuai izin: Ubah goal, Setor, Ubah setoran (hanya milik sendiri), goal batal menyembunyikan aksi |
+| `src/pages/JoinGroupPage.test.tsx` | `/join/:code` tidak gabung otomatis; gabung hanya setelah tombol; ALREADY_MEMBER; kode salah |
 
 ### The push payload contract (`src/db/sync.push.test.ts`)
 

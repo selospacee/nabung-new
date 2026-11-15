@@ -1,4 +1,5 @@
 import type { GroupActivity } from '../../types/shared'
+import { formatShortDate } from '../../utils/sharedGoals'
 import { formatCurrency } from '../../utils/currency'
 
 /**
@@ -42,4 +43,50 @@ export function describeActivity(
     default:
       return `${actor} melakukan aktivitas`
   }
+}
+
+export interface ActivityDayGroup {
+  /** YYYY-MM-DD tanggal lokal perangkat. */
+  dayKey: string
+  /** "Hari ini", "Kemarin", atau tanggal pendek. */
+  label: string
+  items: GroupActivity[]
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0')
+
+/** Tanggal lokal YYYY-MM-DD dari timestamp ISO. Tanggal rusak menghasilkan '' (tidak dikelompokkan). */
+export function localDayKey(iso: string, date: Date = new Date(iso)): string {
+  if (Number.isNaN(date.getTime())) return ''
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+}
+
+/**
+ * Mengelompokkan aktivitas per hari (lokal). `items` harus sudah terurut terbaru dulu.
+ * `now` bisa disuntik agar tes deterministik.
+ */
+export function groupActivityByDay(items: readonly GroupActivity[], now: Date = new Date()): ActivityDayGroup[] {
+  const todayKey = localDayKey('', now)
+  const yesterdayKey = localDayKey('', new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1))
+
+  const groups: ActivityDayGroup[] = []
+  for (const item of items) {
+    const dayKey = localDayKey(item.createdAt)
+    const last = groups[groups.length - 1]
+    if (last && last.dayKey === dayKey) {
+      last.items.push(item)
+      continue
+    }
+    const label =
+      dayKey === todayKey ? 'Hari ini' : dayKey === yesterdayKey ? 'Kemarin' : formatShortDate(dayKey)
+    groups.push({ dayKey, label, items: [item] })
+  }
+  return groups
+}
+
+/** Jam lokal HH.mm untuk baris aktivitas. Tanggal rusak dikembalikan apa adanya. */
+export function formatClock(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  return `${pad2(date.getHours())}.${pad2(date.getMinutes())}`
 }

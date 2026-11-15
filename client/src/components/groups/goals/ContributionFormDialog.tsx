@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import {
   addContribution,
   deleteContribution,
@@ -46,16 +46,17 @@ export function ContributionFormDialog({
   const [formError, setFormError] = useState<SharedSavingsError | null>(null)
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  /** Guard di ref: klik ganda tidak mengirim dua permintaan simpan atau hapus. */
+  const busyRef = useRef(false)
 
   function done() {
-    setSaving(false)
     onSaved()
     onClose()
   }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    if (saving) return
+    if (busyRef.current) return
     setFormError(null)
     setFieldErrors({})
 
@@ -79,6 +80,7 @@ export function ContributionFormDialog({
     }
     const noteValue = parsed.data.note === '' ? null : parsed.data.note
 
+    busyRef.current = true
     setSaving(true)
     try {
       if (contribution) {
@@ -93,12 +95,15 @@ export function ContributionFormDialog({
       done()
     } catch (err) {
       setFormError(toSharedSavingsError(err))
+    } finally {
+      busyRef.current = false
       setSaving(false)
     }
   }
 
   async function handleDelete() {
-    if (!contribution || saving) return
+    if (!contribution || busyRef.current) return
+    busyRef.current = true
     setSaving(true)
     setFormError(null)
     try {
@@ -106,6 +111,8 @@ export function ContributionFormDialog({
       done()
     } catch (err) {
       setFormError(toSharedSavingsError(err))
+    } finally {
+      busyRef.current = false
       setSaving(false)
     }
   }

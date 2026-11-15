@@ -11,7 +11,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '../components/ui'
-import { GroupActivityTab } from '../components/groups/GroupActivityTab'
+import { ActivityFeed } from '../components/groups/ActivityFeed'
 import { GroupGoalsTabSlot } from '../components/groups/GroupGoalsTabSlot'
 import { GroupMembersTab } from '../components/groups/GroupMembersTab'
 import { RenameGroupDialog } from '../components/groups/RenameGroupDialog'
@@ -106,7 +106,7 @@ export function GroupDetailPage() {
         </TabsContent>
 
         <TabsContent value="activity" className="mt-4">
-          <GroupActivityTab groupId={current.id} members={members.data} currency={current.currency} />
+          <ActivityFeed key={current.id} groupId={current.id} members={members.data} currency={current.currency} />
         </TabsContent>
       </Tabs>
 

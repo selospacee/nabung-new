@@ -255,3 +255,15 @@ export function buildContributorBreakdown(
 
   return { total, shares }
 }
+
+// ---------------------------------------------------------------------------
+// Kode undangan
+// ---------------------------------------------------------------------------
+
+/**
+ * Kode undangan sebagaimana diketik atau ditempel pengguna: semua spasi dibuang dan huruf dibesarkan.
+ * Contoh: " 1a2b 3c4d " -> "1A2B3C4D". Server tetap memvalidasi format dan keberadaan kodenya.
+ */
+export function normalizeInviteCode(input: string): string {
+  return input.replace(/\s+/g, '').toUpperCase()
+}

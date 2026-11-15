@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { normalizeInviteCode } from './sharedGoals'
 import type { Contribution, GoalProgress, GoalWithProgress, GroupGoal, GroupMember } from '../types/shared'
 import {
   barWidthPercent,
@@ -278,5 +279,15 @@ describe('buildContributorBreakdown', () => {
   it('goal dengan setoran melewati target tetap menghitung persentase kontributor terhadap total', () => {
     const { shares } = buildContributorBreakdown([contribution({ amount: 2_000_000 })], [member()])
     expect(shares[0].percent).toBe(100)
+  })
+})
+
+describe('normalizeInviteCode', () => {
+  it('membuang spasi di mana pun dan membesarkan huruf', () => {
+    expect(normalizeInviteCode(' 1a2b 3c4d\t')).toBe('1A2B3C4D')
+  })
+
+  it('kosong atau hanya spasi menjadi string kosong', () => {
+    expect(normalizeInviteCode('   ')).toBe('')
   })
 })

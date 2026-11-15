@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useGoalParticipants } from '../../../hooks/useGroupGoals'
 import {
   addGoalParticipant,
@@ -107,6 +107,13 @@ export function GoalFormDialog({
   const [formError, setFormError] = useState<SharedSavingsError | null>(null)
   const [saving, setSaving] = useState(false)
   const [confirmCancel, setConfirmCancel] = useState(false)
+  /** Guard di ref (bukan state) agar dua klik dalam satu render tidak mengirim dua permintaan. */
+  const busyRef = useRef(false)
+  /**
+   * Goal baru sudah tersimpan tetapi penambahan peserta gagal. Simpan lagi TIDAK boleh membuat goal kedua;
+   * pengguna diarahkan menutup dialog dan melengkapi peserta lewat "Ubah goal".
+   */
+  const [partialGoalId, setPartialGoalId] = useState<string | null>(null)
 
   useEffect(() => {
     if (seeded || participants.loading) return
@@ -130,7 +137,7 @@ export function GoalFormDialog({
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    if (readOnly || saving) return
+    if (readOnly || busyRef.current || partialGoalId) return
     setFormError(null)
     setFieldErrors({})
 
@@ -155,6 +162,7 @@ export function GoalFormDialog({
     const deadlineValue = parsed.data.deadline === '' ? null : parsed.data.deadline
     const selected = parsed.data.participantIds
 
+    busyRef.current = true
     setSaving(true)
     try {
       if (goal) {
@@ -172,32 +180,43 @@ export function GoalFormDialog({
           targetAmount: targetCents,
           deadline: deadlineValue,
         })
-        for (const id of selected) {
-          await addGoalParticipant(created.id, id)
+        try {
+          for (const id of selected) {
+            await addGoalParticipant(created.id, id)
+          }
+        } catch (err) {
+          // Goal sudah ada di server: tandai, jangan buat ulang.
+          setPartialGoalId(created.id)
+          setFormError(toSharedSavingsError(err))
+          onSaved()
+          return
         }
       }
-      setSaving(false)
       finish()
     } catch (err) {
-      // Simpan sebagian bisa sudah terjadi (mis. goal tersimpan, peserta gagal): muat ulang data.
+      // Simpan sebagian bisa terjadi (mis. perubahan goal tersimpan, peserta gagal): muat ulang data.
       setFormError(toSharedSavingsError(err))
-      setSaving(false)
       onSaved()
+    } finally {
+      busyRef.current = false
+      setSaving(false)
     }
   }
 
   async function handleCancelGoal() {
-    if (!goal || saving) return
+    if (!goal || busyRef.current) return
+    busyRef.current = true
     setSaving(true)
     setFormError(null)
     try {
       await updateGoal(goal.id, { status: 'cancelled' })
-      setSaving(false)
       finish()
     } catch (err) {
       setFormError(toSharedSavingsError(err))
-      setSaving(false)
       onSaved()
+    } finally {
+      busyRef.current = false
+      setSaving(false)
     }
   }
 
@@ -233,7 +252,7 @@ export function GoalFormDialog({
             id="goal-title"
             className={inputClass}
             value={title}
-            maxLength={200}
+            maxLength={100}
             disabled={readOnly || saving}
             onChange={(e) => setTitle(e.target.value)}
           />
@@ -298,6 +317,12 @@ export function GoalFormDialog({
           {participants.error && <ErrorNotice error={participants.error} />}
         </fieldset>
 
+        {partialGoalId && (
+          <p role="alert" className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            Goal sudah tersimpan, tetapi peserta belum lengkap. Tutup dialog ini lalu buka &quot;Ubah goal&quot; untuk
+            melengkapi peserta.
+          </p>
+        )}
         <ErrorNotice error={formError} />
 
         {isEdit && goal?.status === 'active' && canManage && (
@@ -334,7 +359,7 @@ export function GoalFormDialog({
           {!readOnly && (
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || partialGoalId !== null}
               className="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white disabled:opacity-50"
             >
               {saving ? 'Menyimpan…' : 'Simpan'}
