@@ -53,6 +53,7 @@ const h = vi.hoisted(() => {
       order: () => q,
       limit: () => q,
       range: () => q,
+      in: () => q,
       single: async () => result,
       maybeSingle: async () => result,
       then: (onFulfilled: any, onRejected: any) => Promise.resolve(result).then(onFulfilled, onRejected),
@@ -108,6 +109,8 @@ const h = vi.hoisted(() => {
 
   const dexieTable = (name: string) => ({
     bulkGet: async (ids: unknown[]) => ids.map(() => undefined),
+    get: async (id: string) => (name === 'accounts' ? localAccounts.find(r => r.id === id) : undefined),
+    update: async () => 1,
     bulkPut: async () => {},
     where: () => ({
       equals: () => ({ toArray: async () => (name === 'accounts' ? localAccounts : []) }),
