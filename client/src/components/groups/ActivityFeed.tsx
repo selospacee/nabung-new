@@ -106,7 +106,11 @@ export function ActivityFeed({ groupId, members, currency }: ActivityFeedProps) 
           </section>
         ))}
 
-        {moreError && <Alert variant="destructive">{moreError.message}</Alert>}
+        {moreError && (
+          <div role="alert">
+            <Alert variant="destructive">{moreError.message}</Alert>
+          </div>
+        )}
 
         {canLoadMore && (
           <div className="flex justify-center">
