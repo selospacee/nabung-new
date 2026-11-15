@@ -60,7 +60,8 @@ export interface Transaction {
   type: 'income' | 'expense' | 'transfer'
   date: string
   description: string
-  merchant: string
+  // Deprecated: no longer shown or written. Kept optional so old local rows still type-check.
+  merchant?: string | null
   notes: string
   receiptImage: string | null
   receiptOcrText: string | null

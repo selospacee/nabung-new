@@ -43,7 +43,6 @@ declare global {
 export interface ParsedTransaction {
   amount: number | null
   date: string | null
-  merchant: string
   description: string
   suggestedCategoryId: string | null
   suggestedType: 'income' | 'expense' | 'transfer'
@@ -67,7 +66,6 @@ export function useSpeechToText(categories: Category[]) {
   const [parsed, setParsed] = useState<ParsedTransaction>({
     amount: null,
     date: null,
-    merchant: '',
     description: '',
     suggestedCategoryId: null,
     suggestedType: 'expense',
@@ -144,15 +142,14 @@ export function useSpeechToText(categories: Category[]) {
       date = toISODate(new Date())
     }
 
-    // Extract merchant and description from remaining text
-    const words = remaining.split(/\s+/).filter(w => w.length > 0)
-    const merchant = words.slice(0, 3).join(' ')
-    const description = words.slice(3).join(' ')
+    // Description is the remaining transcript text. The first words are used only
+    // as an internal hint for category guessing and are never shown or stored.
+    const description = remaining.trim()
+    const merchantHint = description.split(/\s+/).slice(0, 3).join(' ')
 
-    // Auto-suggest category
-    const suggestedCategoryId = findCategory(categories, merchant, description)
+    const suggestedCategoryId = findCategory(categories, merchantHint, description)
 
-    return { amount, date, merchant, description, suggestedCategoryId, suggestedType: 'expense' as const, location: null, latitude: null, longitude: null }
+    return { amount, date, description, suggestedCategoryId, suggestedType: 'expense' as const, location: null, latitude: null, longitude: null }
   }, [categories])
 
   const findCategory = (cats: Category[], merchant: string, desc: string): string | null => {
@@ -277,7 +274,7 @@ export function useSpeechToText(categories: Category[]) {
 
   const clearTranscript = useCallback(() => {
       setTranscript('')
-      setParsed({ amount: null, date: null, merchant: '', description: '', suggestedCategoryId: null, suggestedType: 'expense', location: null, latitude: null, longitude: null })
+      setParsed({ amount: null, date: null, description: '', suggestedCategoryId: null, suggestedType: 'expense', location: null, latitude: null, longitude: null })
       transcriptRef.current = ''
     }, [])
 

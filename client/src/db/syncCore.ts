@@ -236,6 +236,8 @@ function toPayload(spec: SyncTableSpec, local: Row, userId: string): Record<stri
   snake.user_id = userId
   // balance is derived from transactions server-side; never send it.
   if (spec.dexie === 'accounts') delete snake.balance
+  // merchant is no longer written; send null so stale server values are cleared (column and ALLOWED_KEYS kept).
+  if (spec.dexie === 'transactions') snake.merchant = null
   return stripToAllowedKeys(snake, spec.remote)
 }
 

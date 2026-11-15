@@ -225,7 +225,7 @@ export function TransactionsPage() {
       if (filters.search) {
         const q = filters.search.toLowerCase()
         result = result.filter(t =>
-          t.description.toLowerCase().includes(q) || t.merchant?.toLowerCase().includes(q)
+          t.description.toLowerCase().includes(q)
         )
       }
 
@@ -266,7 +266,6 @@ export function TransactionsPage() {
               type: tx.type,
               date: tx.date,
               description: tx.description || '',
-              merchant: tx.merchant || '',
               notes: tx.notes || '',
               receiptImage: tx.receiptImage || null,
               receiptOcrText: tx.receiptOcrText || null,
@@ -292,7 +291,6 @@ export function TransactionsPage() {
         type: tx.type,
         date: tx.date,
         description: tx.description || '',
-        merchant: tx.merchant || '',
         notes: tx.notes || '',
         receiptImage: tx.receiptImage || null,
         receiptOcrText: tx.receiptOcrText || null,
@@ -314,7 +312,6 @@ export function TransactionsPage() {
         accountId: defaultAccount?.id || '',
         cashierId: '',
         description: '',
-        merchant: '',
         notes: '',
         receiptImage: null as string | null,
         receiptOcrText: null as string | null,
@@ -333,7 +330,6 @@ export function TransactionsPage() {
         accountId: tx?.accountId || defaultAccount?.id || '',
         cashierId: tx?.cashierId || '',
         description: tx?.description || '',
-        merchant: tx?.merchant || '',
         notes: tx?.notes || '',
         receiptImage: tx?.receiptImage || null,
         receiptOcrText: tx?.receiptOcrText || null,
@@ -364,7 +360,6 @@ export function TransactionsPage() {
                         categoryId: form.categoryId || null,
                         accountId: form.accountId || defaultAccount?.id || (accounts?.[0]?.id || ''),
                         description: form.description,
-                        merchant: '',
                         notes: form.notes,
                         receiptImage: form.receiptImage,
                         receiptOcrText: form.receiptOcrText,
@@ -380,7 +375,6 @@ export function TransactionsPage() {
                         categoryId: form.categoryId || null,
                         accountId: form.accountId || defaultAccount?.id || (accounts?.[0]?.id || ''),
                         description: form.description,
-                        merchant: '',
                         notes: form.notes,
                         receiptImage: form.receiptImage,
                         receiptOcrText: form.receiptOcrText,
@@ -416,7 +410,6 @@ export function TransactionsPage() {
                     categoryId: pickCategoryId(categories, voiceCtx.parsed.suggestedType || 'expense', voiceCtx.parsed.suggestedCategoryId) || null,
                     accountId: defaultAccount?.id || (accounts?.[0]?.id || ''),
                     description: voiceCtx.parsed.description,
-                    merchant: '',
                     notes: '',
                     receiptImage: null,
                     receiptOcrText: null,
@@ -443,7 +436,6 @@ export function TransactionsPage() {
       amount: p.amount ? String(p.amount / 100) : '',
       date: p.date || toISODate(new Date()),
       categoryId: pickCategoryId(categories, p.suggestedType || 'expense', p.suggestedCategoryId),
-      merchant: '',
       description: p.description || '',
       location: p.location || '',
       latitude: p.latitude ?? null,
@@ -463,7 +455,6 @@ export function TransactionsPage() {
       amount: ocrResult.total ? String(ocrResult.total / 100) : '',
       date: ocrResult.date || toISODate(new Date()),
       categoryId: pickCategoryId(categories, ocrResult.suggestedType || 'expense', ocrResult.suggestedCategoryId),
-      merchant: '',
       description: '',
       receiptImage,
       receiptOcrText: ocrResult.text ?? null,
@@ -530,7 +521,6 @@ export function TransactionsPage() {
                     categoryId: pickCategoryId(categories, ocrResult.suggestedType || 'expense', ocrResult.suggestedCategoryId) || null,
                     accountId: defaultAccount?.id || (accounts?.[0]?.id || ''),
                     description: '',
-                    merchant: '',
                     notes: '',
                     receiptImage: receiptImage,
                     receiptOcrText: ocrResult.text,
@@ -719,9 +709,7 @@ export function TransactionsPage() {
 
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground truncate">
-                        {tx.merchant || tx.description || 'Transaction'}
-                        {tx.description && tx.merchant && ' — '}
-                        {tx.description && tx.description !== tx.merchant && tx.description}
+                        {tx.description || 'Transaction'}
                       </p>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         {cat && (
@@ -1123,7 +1111,6 @@ export function TransactionsPage() {
                             amount: ocrResult.total ? String(ocrResult.total / 100) : '',
                             date: ocrResult.date || toISODate(new Date()),
                             categoryId: pickCategoryId(categories, ocrResult.suggestedType || 'expense', ocrResult.suggestedCategoryId),
-                            merchant: '',
                             description: '',
                             receiptImage: receiptImage,
                             receiptOcrText: ocrResult.text,
