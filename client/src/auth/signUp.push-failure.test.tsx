@@ -110,10 +110,17 @@ const h = vi.hoisted(() => {
   const dexieTable = (name: string) => ({
     bulkGet: async (ids: unknown[]) => ids.map(() => undefined),
     get: async (id: string) => (name === 'accounts' ? localAccounts.find(r => r.id === id) : undefined),
-    update: async () => 1,
+    update: async (id: string, changes: Record<string, unknown>) => {
+      const row = name === 'accounts' ? localAccounts.find(r => r.id === id) : undefined
+      if (row) Object.assign(row, changes)
+      return row ? 1 : 0
+    },
     bulkPut: async () => {},
-    where: () => ({
-      equals: () => ({ toArray: async () => (name === 'accounts' ? localAccounts : []) }),
+    where: (index: string) => ({
+      equals: (value: unknown) => ({
+        toArray: async () =>
+          (name === 'accounts' ? localAccounts : []).filter(row => row[index] === value),
+      }),
     }),
   })
 
@@ -156,9 +163,10 @@ beforeEach(() => {
   h.authState.signedIn = false
   h.localAccounts.length = 0
   // These are what sync.ts writes back into Dexie after pulling the 2 accounts created by signup.
+  // Baris yang baru dibuat lokal, sehingga ditandai dirty (penanda _dirty dari hook stempel).
   h.localAccounts.push(
-    { id: '00000000-0000-4000-8000-000000000001', userId: h.USER, name: 'Cash', type: 'cash', currency: 'IDR', icon: 'Wallet', color: '#10B981', createdAt: h.NOW },
-    { id: '00000000-0000-4000-8000-000000000002', userId: h.USER, name: 'Bank Account', type: 'bank', currency: 'IDR', icon: 'Building2', color: '#3B82F6', createdAt: h.NOW },
+    { id: '00000000-0000-4000-8000-000000000001', userId: h.USER, name: 'Cash', type: 'cash', currency: 'IDR', icon: 'Wallet', color: '#10B981', createdAt: h.NOW, _dirty: 1 },
+    { id: '00000000-0000-4000-8000-000000000002', userId: h.USER, name: 'Bank Account', type: 'bank', currency: 'IDR', icon: 'Building2', color: '#3B82F6', createdAt: h.NOW, _dirty: 1 },
   )
   logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
   errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
