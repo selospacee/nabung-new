@@ -20,6 +20,7 @@ export interface Account {
   icon: string
   color: string
   createdAt: string
+  deletedAt?: string | null
 }
 
 export interface Category {
@@ -32,6 +33,7 @@ export interface Category {
   parentId: string | null
   sortOrder: number
   merchantPatterns: string[]
+  deletedAt?: string | null
 }
 
 export interface Cashier {
@@ -47,6 +49,7 @@ export interface Cashier {
   merchantName: string | null
   createdAt: string
   updatedAt: string
+  deletedAt?: string | null
 }
 
 export interface Transaction {
@@ -83,6 +86,7 @@ export interface Budget {
   rollover: boolean
   createdAt: string
   updatedAt?: string
+  deletedAt?: string | null
 }
 
 export interface SavingsGoal {
@@ -95,4 +99,5 @@ export interface SavingsGoal {
   color: string
   icon: string
   createdAt: string
+  deletedAt?: string | null
 }

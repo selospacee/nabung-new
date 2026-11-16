@@ -174,6 +174,8 @@ const h = vi.hoisted(() => {
   })
 
   const db = {
+    // Penanda pull bertahap: kosong = pull penuh.
+    syncMeta: { get: async () => undefined, put: async () => {} },
     accounts: table('accounts'),
     categories: table('categories'),
     transactions: table('transactions'),

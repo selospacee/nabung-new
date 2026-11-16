@@ -38,6 +38,16 @@ export function useAccounts(userId?: string | null) {
   return useLiveQuery(async () => {
     if (!userId) userId = getCurrentUser()
     if (!userId) return []
+    const rows = await db.accounts.where('userId').equals(userId).sortBy('createdAt')
+    return rows.filter(a => !a.deletedAt)
+  }, [userId])
+}
+
+/** Termasuk akun terhapus. Hanya untuk label referensi, jangan untuk pilihan. */
+export function useAccountsWithDeleted(userId?: string | null) {
+  return useLiveQuery(async () => {
+    if (!userId) userId = getCurrentUser()
+    if (!userId) return []
     return db.accounts.where('userId').equals(userId).sortBy('createdAt')
   }, [userId])
 }
@@ -81,6 +91,16 @@ export function useDefaultAccount() {
 
 // Category hooks
 export function useCategories(userId?: string | null) {
+  return useLiveQuery(async () => {
+    if (!userId) userId = getCurrentUser()
+    if (!userId) return []
+    const rows = await db.categories.where('userId').equals(userId).sortBy('sortOrder')
+    return rows.filter(c => !c.deletedAt)
+  }, [userId])
+}
+
+/** Termasuk kategori terhapus. Hanya untuk label referensi, jangan untuk pilihan. */
+export function useCategoriesWithDeleted(userId?: string | null) {
   return useLiveQuery(async () => {
     if (!userId) userId = getCurrentUser()
     if (!userId) return []
@@ -163,7 +183,7 @@ export function useBudgets(userId?: string | null, yearMonth?: string) {
   return useLiveQuery(async () => {
     if (!userId) userId = getCurrentUser()
     if (!userId || !yearMonth) return []
-    return db.budgets.where({ userId, yearMonth }).toArray()
+    return (await db.budgets.where({ userId, yearMonth }).toArray()).filter(b => !b.deletedAt)
   }, [userId, yearMonth])
 }
 
@@ -172,7 +192,7 @@ export function useAllBudgets(userId?: string | null) {
   return useLiveQuery(async () => {
     if (!userId) userId = getCurrentUser()
     if (!userId) return []
-    return db.budgets.where('userId').equals(userId).toArray()
+    return (await db.budgets.where('userId').equals(userId).toArray()).filter(b => !b.deletedAt)
   }, [userId])
 }
 
@@ -189,7 +209,7 @@ export function useGoals(userId?: string | null) {
   return useLiveQuery(async () => {
     if (!userId) userId = getCurrentUser()
     if (!userId) return []
-    return db.goals.where('userId').equals(userId).toArray()
+    return (await db.goals.where('userId').equals(userId).toArray()).filter(g => !g.deletedAt)
   }, [userId])
 }
 
@@ -199,7 +219,7 @@ export function useCashiers(userId?: string | null, activeOnly = true) {
     if (!userId) userId = getCurrentUser()
     if (!userId) return []
     let query = db.cashiers.where('userId').equals(userId)
-    if (activeOnly) query = query.filter(c => c.isActive)
+    query = query.filter(c => !c.deletedAt && (!activeOnly || c.isActive))
     return query.sortBy('name')
   }, [userId, activeOnly])
 }

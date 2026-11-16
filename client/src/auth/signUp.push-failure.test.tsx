@@ -127,6 +127,8 @@ const h = vi.hoisted(() => {
   const db = {
     // Meniru Dexie: penulisan dari pull berjalan di dalam transaksi.
     transaction: async (_mode: string, _tables: unknown, fn: (tx: object) => unknown) => fn({}),
+    // Penanda pull bertahap: kosong = pull penuh.
+    syncMeta: { get: async () => undefined, put: async () => {} },
     users: { put: async () => {} },
     accounts: dexieTable('accounts'),
     categories: dexieTable('categories'),

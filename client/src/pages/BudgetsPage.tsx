@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useCurrentUser, useAllBudgets, useCategories, useTransactions, useAccounts, useAccountBalances } from '../db/hooks'
+import { softDeleteBudget, softDeleteCategory, softDeleteAccount, InUseError } from '../db/usage'
 import { db } from '../db'
 import { pushLocalChangesToSupabase } from '../db/sync'
 import { v4 as uuid } from 'uuid'
@@ -296,13 +297,19 @@ export function BudgetsPage() {
 
   const handleDeleteBudget = async (id: string) => {
     if (!confirm('Delete this budget?')) return
-    await db.budgets.delete(id)
+    await softDeleteBudget(id)
     await pushLocalChangesToSupabase(userId || '')
   }
 
+  // Ditolak bila kategori masih dipakai transaksi atau budget (lihat db/usage.ts).
   const handleDeleteCategory = async (id: string) => {
-    if (!confirm("Delete this category? Transactions using it won't be affected.")) return
-    await db.categories.delete(id)
+    if (!confirm('Delete this category? It must not be used by any transaction or budget.')) return
+    try {
+      await softDeleteCategory(id)
+    } catch (error) {
+      if (error instanceof InUseError) return alert(error.message)
+      throw error
+    }
     await pushLocalChangesToSupabase(userId || '')
   }
 
@@ -654,9 +661,13 @@ export function BudgetsPage() {
                                 <Edit3 className="w-3.5 h-3.5" />
                               </Button>
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => {
-                                if (confirm('Delete this account? Its transactions will not be deleted.')) {
-                                  db.accounts.delete(account.id);
-                                  pushLocalChangesToSupabase(userId || '');
+                                if (confirm('Delete this account?')) {
+                                  softDeleteAccount(account.id)
+                                    .then(() => pushLocalChangesToSupabase(userId || ''))
+                                    .catch(error => {
+                                      if (error instanceof InUseError) alert(error.message)
+                                      else throw error
+                                    });
                                 }
                               }}>
                                 <Trash2 className="w-3.5 h-3.5" />

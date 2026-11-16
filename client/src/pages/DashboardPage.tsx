@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import { useSupabaseAuth } from '../auth/SupabaseAuthContext'
-import { useCurrentUser, useTransactions, useAccounts, useCategories, useDefaultAccount, useAccountBalances, computeMonthlyStats, computeMonthlyTrend } from '../db/hooks'
+import { useCurrentUser, useTransactions, useAccounts, useCategories, useAccountsWithDeleted, useCategoriesWithDeleted, useDefaultAccount, useAccountBalances, computeMonthlyStats, computeMonthlyTrend } from '../db/hooks'
+import { refLabel } from '../db/refs'
 import { useIncomeCategories, useExpenseCategories } from '../db/hooks'
 import { syncUserDataFromSupabase } from '../db/sync'
 import { cn, Card, CardHeader, CardTitle, CardContent, Button, Badge, Progress, EmptyState, Skeleton } from '../components/ui'
@@ -19,6 +20,8 @@ export function DashboardPage() {
   const { user } = useCurrentUser()
   const accounts = useAccounts()
   const categories = useCategories()
+  const accountsAll = useAccountsWithDeleted()
+  const categoriesAll = useCategoriesWithDeleted()
   const incomeCats = useIncomeCategories()
   const expenseCats = useExpenseCategories()
   const defaultAccount = useDefaultAccount()
@@ -69,12 +72,12 @@ export function DashboardPage() {
   }, [allTransactions])
 
   const categoryData = useMemo(() => {
-    if (!stats || !categories) return []
+    if (!stats || !categoriesAll) return []
     return Object.entries(stats.byCategory)
       .map(([catId, vals]) => {
-        const cat = categories.find(c => c.id === catId)
+        const cat = categoriesAll.find(c => c.id === catId)
         return {
-          name: cat?.name || 'Uncategorized',
+          name: catId === 'uncategorized' ? 'Uncategorized' : refLabel(categoriesAll, catId, 'kategori'),
           value: vals.expense,
           color: cat?.color || '#6B7280',
           icon: cat?.icon || 'MoreHorizontal',
@@ -83,12 +86,13 @@ export function DashboardPage() {
       .filter(d => d.value > 0)
       .sort((a, b) => b.value - a.value)
       .slice(0, 8)
-  }, [stats, categories])
+  }, [stats, categoriesAll])
 
+  // Total memakai akun terhapus juga: uang di akun yang dihapus tetap dihitung.
   const totalBalance = useMemo(() => {
-    if (!accounts) return 0
-    return accounts.reduce((sum, a) => sum + (balances[a.id] || 0), 0)
-  }, [accounts, balances])
+    if (!accountsAll) return 0
+    return accountsAll.reduce((sum, a) => sum + (balances[a.id] || 0), 0)
+  }, [accountsAll, balances])
 
   const prevMonth = () => {
     const d = new Date(selectedMonth + '-01')
@@ -332,8 +336,8 @@ export function DashboardPage() {
           {transactions && transactions.length > 0 ? (
             <div className="space-y-2">
               {transactions.slice(0, 10).map(tx => {
-                const cat = categories?.find(c => c.id === tx.categoryId)
-                const account = accounts?.find(a => a.id === tx.accountId)
+                const cat = categoriesAll?.find(c => c.id === tx.categoryId)
+                const account = accountsAll?.find(a => a.id === tx.accountId)
                 const isIncome = tx.type === 'income'
                 const icon = cat?.icon || (isIncome ? 'TrendingUp' : 'TrendingDown')
 
@@ -349,14 +353,14 @@ export function DashboardPage() {
                           {tx.description || 'Transaction'}
                         </p>
                         <div className="flex items-center gap-2 mt-0.5">
-                          {cat && (
+                          {tx.categoryId && (
                             <Badge variant={tx.type === 'income' ? 'income' : tx.type === 'expense' ? 'expense' : 'secondary'}>
-                              {cat.name}
+                              {refLabel(categoriesAll, tx.categoryId, 'kategori')}
                             </Badge>
                           )}
                           <span className="text-xs text-muted-foreground">
                             {formatDate(tx.date, 'MMM d')}
-                            {account && <span className="ml-1">· {account.name}</span>}
+                            {tx.accountId && <span className="ml-1">· {refLabel(accountsAll, tx.accountId, 'akun')}</span>}
                           </span>
                         </div>
                       </div>

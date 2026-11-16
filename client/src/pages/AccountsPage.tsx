@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useCurrentUser } from '../db/hooks'
 import { useAccounts, useAccountBalances } from '../db/hooks'
+import { softDeleteAccount, InUseError } from '../db/usage'
 import { db } from '../db'
 import { pushLocalChangesToSupabase } from '../db/sync'
 import { v4 as uuid } from 'uuid'
@@ -95,9 +96,15 @@ export function AccountsPage() {
       await pushLocalChangesToSupabase(userId || '')
     }
 
+  // Ditolak bila akun masih dipakai transaksi.
   const handleDelete = async (id: string) => {
-      if (!confirm('Delete this account? Its transactions will not be deleted.')) return
-      await db.accounts.delete(id)
+      if (!confirm('Delete this account?')) return
+      try {
+        await softDeleteAccount(id)
+      } catch (error) {
+        if (error instanceof InUseError) return alert(error.message)
+        throw error
+      }
       // Push to Supabase
       await pushLocalChangesToSupabase(userId || '')
     }

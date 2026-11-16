@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useCurrentUser, useCategories } from '../db/hooks'
+import { softDeleteCategory, InUseError } from '../db/usage'
 import { db } from '../db'
 import { pushLocalChangesToSupabase } from '../db/sync'
 import { v4 as uuid } from 'uuid'
@@ -121,9 +122,15 @@ export function CategoriesPage() {
           await pushLocalChangesToSupabase(userId || '')
         }
 
+  // Ditolak bila kategori masih dipakai transaksi atau budget.
   const handleDelete = async (id: string) => {
-      if (!confirm("Delete this category? Transactions using it won't be affected.")) return
-      await db.categories.delete(id)
+      if (!confirm('Delete this category? It must not be used by any transaction or budget.')) return
+      try {
+        await softDeleteCategory(id)
+      } catch (error) {
+        if (error instanceof InUseError) return alert(error.message)
+        throw error
+      }
       // Push to Supabase
       await pushLocalChangesToSupabase(userId || '')
     }

@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
-import { useCurrentUser, useTransactions, useCategories, useCashiers } from '../db/hooks'
+import { useCurrentUser, useTransactions, useCategories, useCategoriesWithDeleted, useCashiers } from '../db/hooks'
+import { refLabel } from '../db/refs'
 import { cn, Card, CardHeader, CardTitle, CardContent, Button, Badge, Select, EmptyState } from '../components/ui'
 import { formatCurrency, centsToDisplay } from '../utils/currency'
 import { toISODate, formatDate } from '../utils/dates'
@@ -36,6 +37,7 @@ export function ReportsPage() {
   const currency = user?.currency || 'IDR'
   const transactions = useTransactions(userId)
   const categories = useCategories(userId)
+  const categoriesAll = useCategoriesWithDeleted(userId)
   const [chartType, setChartType] = useState('line')
   const [period, setPeriod] = useState('30d')
   const [customStart, setCustomStart] = useState('')
@@ -170,15 +172,16 @@ export function ReportsPage() {
 
     return Object.entries(byCat)
       .map(([catId, value]) => {
-        const cat = categories?.find(c => c.id === catId)
+        // Termasuk kategori terhapus: nilainya tetap muncul dengan label "(kategori dihapus)".
+        const cat = categoriesAll?.find(c => c.id === catId)
         return { 
-          name: cat?.name || catId, 
+          name: catId === 'uncategorized' ? catId : refLabel(categoriesAll, catId, 'kategori') || catId, 
           value, 
           color: cat?.color || '#6B7280' 
         }
       })
       .sort((a, b) => b.value - a.value)
-  }, [filteredTxns, categories])
+  }, [filteredTxns, categoriesAll])
 
   // Summary stats
 
@@ -202,8 +205,8 @@ export function ReportsPage() {
               }
               const header = 'Date,Description,Category,Type,Amount,Account,Location,Latitude,Longitude\n'
               const rows = filteredTxns.map(tx => {
-                const cat = categories?.find(c => c.id === tx.categoryId)
-                return `${escape(tx.date)},${escape(tx.description)},${escape(cat ? cat.name : 'Uncategorized')},${escape(tx.type)},${escape(tx.amount)},${escape(tx.accountId)},${escape(tx.location || '')},${escape(tx.latitude ?? '')},${escape(tx.longitude ?? '')}`
+                const catName = tx.categoryId ? refLabel(categoriesAll, tx.categoryId, 'kategori') : 'Uncategorized'
+                return `${escape(tx.date)},${escape(tx.description)},${escape(catName)},${escape(tx.type)},${escape(tx.amount)},${escape(tx.accountId)},${escape(tx.location || '')},${escape(tx.latitude ?? '')},${escape(tx.longitude ?? '')}`
               }).join('\n')
               const blob = new Blob([header + rows], { type: 'text/csv' })
               const url = URL.createObjectURL(blob)

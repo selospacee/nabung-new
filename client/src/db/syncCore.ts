@@ -116,6 +116,109 @@ function serverRowToLocal(spec: SyncTableSpec, row: Row): Row {
   return local
 }
 
+/**
+ * Aturan konflik (hapus selalu menang):
+ * - baris server terhapus menang atas edit lokal yang hidup (tidak pernah "bangkit" diam-diam);
+ * - hapus lokal menang atas baris server yang hidup;
+ * - selain itu LWW berdasarkan updatedAt (yang lebih baru menang).
+ * `remoteWins` dipakai saat menerapkan baris server ke Dexie; `pushWins` saat mengirim baris lokal.
+ * Keduanya konsisten: pushWins(l, r) === false  <=>  remoteWins(l, r) === true (kecuali keduanya terhapus).
+ */
+export function remoteWins(local: Row | undefined, remote: Row): boolean {
+  if (!local) return true
+  if (remote.deletedAt) return true
+  if (local.deletedAt) return false
+  return !isNewer(local.updatedAt, remote.updatedAt)
+}
+
+export function pushWins(local: Row, serverRaw: Row): boolean {
+  if (serverRaw.deleted_at) return !!local.deletedAt
+  if (local.deletedAt) return true
+  return !isNewer(serverRaw.updated_at, local.updatedAt)
+}
+
+// ---------- Pull bertahap ----------
+
+const PAGE = 1000
+/** Jendela tumpang tindih terhadap kursor: menutupi baris yang commit-nya terlambat. */
+export const DELTA_WINDOW_MS = 60_000
+/** Pull penuh tiap N jam sebagai jaring pengaman. */
+export const FULL_PULL_EVERY_MS = 6 * 3_600_000
+const EPOCH = '1970-01-01T00:00:00.000Z'
+
+/** Kursor yang diketahui per `${userId}:${tabelRemote}`. Dipakai untuk mengabaikan gema realtime. */
+const cursorCache = new Map<string, string>()
+
+/** true bila perubahan dengan `updatedAt` ini sudah tercakup oleh pull sebelumnya. */
+export function isCovered(userId: string, remoteTable: string, updatedAt: string): boolean {
+  const cursor = cursorCache.get(`${userId}:${remoteTable}`)
+  return !!cursor && Date.parse(updatedAt) <= Date.parse(cursor)
+}
+
+function maxUpdatedAt(rows: Row[]): string | undefined {
+  let best: string | undefined
+  for (const r of rows) {
+    const v = r.updated_at as string | undefined
+    if (v && (!best || Date.parse(v) > Date.parse(best))) best = v
+  }
+  return best
+}
+
+async function saveMeta(userId: string, remoteTable: string, cursor: string, lastFullAt: string | null): Promise<void> {
+  const key = `${userId}:${remoteTable}`
+  await db.syncMeta.put({ key, cursor, lastFullAt })
+  cursorCache.set(key, cursor)
+}
+
+async function fetchDeltaPage(table: string, userId: string, from: string): Promise<Row[]> {
+  const { data, error } = await supabase
+    .from(table)
+    .select('*')
+    .eq('user_id', userId)
+    .gte('updated_at', from)
+    .order('updated_at', { ascending: true })
+    .range(0, PAGE - 1)
+  if (error) throw error
+  return (data || []) as Row[]
+}
+
+/**
+ * Pull satu tabel. Penuh bila penanda hilang atau lebih tua dari N jam; selain itu delta dari kursor.
+ * Kursor hanya maju setelah halaman di-apply, sehingga kegagalan di tengah mengulang dari titik terakhir.
+ * Pull penuh hanya memajukan kursor setelah selesai.
+ */
+async function pullTable(spec: SyncTableSpec, userId: string, nowMs: number): Promise<number> {
+  const key = `${userId}:${spec.remote}`
+  const meta = await db.syncMeta.get(key)
+  const needFull =
+    !meta?.cursor || !meta.lastFullAt || nowMs - Date.parse(meta.lastFullAt) > FULL_PULL_EVERY_MS
+  if (needFull) {
+    const rows = await fetchAllRows(spec.remote, userId)
+    const conflicts = await applyRemoteRows(spec, rows)
+    await saveMeta(userId, spec.remote, maxUpdatedAt(rows) ?? meta?.cursor ?? EPOCH, new Date(nowMs).toISOString())
+    return conflicts
+  }
+
+  let cursor = meta!.cursor!
+  let conflicts = 0
+  // Halaman pertama memakai jendela tumpang tindih. Halaman berikutnya mulai tepat dari kursor,
+  // supaya paging selalu maju (jendela berulang akan mengambil ulang baris yang sama).
+  let from = new Date(Date.parse(cursor) - DELTA_WINDOW_MS).toISOString()
+  for (;;) {
+    const rows = await fetchDeltaPage(spec.remote, userId, from)
+    if (rows.length === 0) break
+    conflicts += await applyRemoteRows(spec, rows)
+    const next = maxUpdatedAt(rows)
+    if (!next || Date.parse(next) < Date.parse(cursor)) break
+    if (Date.parse(next) === Date.parse(cursor) && rows.length >= PAGE) break // seluruh halaman sama: tidak bisa maju
+    cursor = next
+    await saveMeta(userId, spec.remote, cursor, meta!.lastFullAt)
+    if (rows.length < PAGE) break
+    from = cursor
+  }
+  return conflicts
+}
+
 export function validateUserId(userId: unknown): asserts userId is string {
   if (!userId || typeof userId !== 'string' || userId.trim() === '') {
     throw new Error('[Sync] Invalid userId: must be a non-empty string')
@@ -142,7 +245,7 @@ async function applyRemoteRows(spec: SyncTableSpec, rows: Row[]): Promise<number
     for (const row of rows) {
       const remote = serverRowToLocal(spec, row)
       const local = localById.get(remote.id)
-      if (local && isNewer(local.updatedAt, remote.updatedAt)) {
+      if (local && !remoteWins(local, remote)) {
         if (local._dirty === 1) conflicts++
         continue
       }
@@ -192,9 +295,9 @@ export async function pullFromServer(userId: string): Promise<PullResult> {
   }
 
   // 2. Tabel yang disinkronkan (termasuk baris soft-delete supaya penghapusan sampai ke perangkat lain)
+  const nowMs = Date.now()
   for (const spec of SYNC_TABLES) {
-    const rows = await fetchAllRows(spec.remote, userId)
-    conflicts += await applyRemoteRows(spec, rows)
+    conflicts += await pullTable(spec, userId, nowMs)
   }
 
   if (conflicts > 0) bumpConflicts(conflicts)
@@ -203,12 +306,12 @@ export async function pullFromServer(userId: string): Promise<PullResult> {
 
 // Allowed keys per table to prevent 400 from unknown fields
 const ALLOWED_KEYS: Record<string, string[]> = {
-  accounts: ['id', 'user_id', 'name', 'type', 'currency', 'icon', 'color', 'created_at', 'updated_at'],
-  categories: ['id', 'user_id', 'name', 'type', 'icon', 'color', 'parent_id', 'sort_order', 'merchant_patterns', 'updated_at'],
+  accounts: ['id', 'user_id', 'name', 'type', 'currency', 'icon', 'color', 'created_at', 'updated_at', 'deleted_at'],
+  categories: ['id', 'user_id', 'name', 'type', 'icon', 'color', 'parent_id', 'sort_order', 'merchant_patterns', 'updated_at', 'deleted_at'],
   transactions: ['id', 'user_id', 'account_id', 'category_id', 'cashier_id', 'amount', 'currency', 'type', 'date', 'description', 'merchant', 'notes', 'receipt_image', 'receipt_ocr_text', 'location', 'latitude', 'longitude', 'created_at', 'updated_at', 'deleted_at'],
-  budgets: ['id', 'user_id', 'category_id', 'year_month', 'limit_amount', 'alert_threshold', 'rollover', 'created_at', 'updated_at'],
-  savings_goals: ['id', 'user_id', 'name', 'target_amount', 'current_amount', 'target_date', 'color', 'icon', 'created_at', 'updated_at'],
-  cashiers: ['id', 'user_id', 'name', 'email', 'phone', 'role', 'cup_commission', 'base_salary', 'is_active', 'merchant_name', 'created_at', 'updated_at'],
+  budgets: ['id', 'user_id', 'category_id', 'year_month', 'limit_amount', 'alert_threshold', 'rollover', 'created_at', 'updated_at', 'deleted_at'],
+  savings_goals: ['id', 'user_id', 'name', 'target_amount', 'current_amount', 'target_date', 'color', 'icon', 'created_at', 'updated_at', 'deleted_at'],
+  cashiers: ['id', 'user_id', 'name', 'email', 'phone', 'role', 'cup_commission', 'base_salary', 'is_active', 'merchant_name', 'created_at', 'updated_at', 'deleted_at'],
 }
 
 function stripToAllowedKeys(obj: Record<string, unknown>, table: string): Record<string, unknown> {
@@ -293,7 +396,7 @@ export async function pushToServer(userId: string): Promise<PushResult> {
         // LWW dua arah: jangan pernah menimpa versi server yang lebih baru (misalnya dari perangkat lain).
         // Terapkan versi server dan buang salinan lokal yang usang.
         const remoteRow = server.get(local.id as string)
-        if (remoteRow && isNewer(remoteRow.updated_at, local.updatedAt)) {
+        if (remoteRow && !pushWins(local, remoteRow)) {
           await applyRemoteRows(spec, [remoteRow])
           bumpConflicts(1)
           continue
