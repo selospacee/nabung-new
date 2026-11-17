@@ -37,7 +37,7 @@ export function OnboardingPage() {
   const { run, pending: loading } = useAsyncAction()
   const navigate = useNavigate()
   const location = useLocation()
-  const [mode, setMode] = useState<'login' | 'signUp'>('signUp')
+  const [mode, setMode] = useState<'login' | 'signUp'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
