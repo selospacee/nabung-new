@@ -32,7 +32,7 @@ const MAP_PROVIDERS = [
   { value: 'google', label: 'Google Maps', icon: MapPin },
 ]
 
-export function ReportsPage() {
+export function ReportsSection() {
   const { user, userId } = useCurrentUser()
   const currency = user?.currency || 'IDR'
   const transactions = useTransactions(userId)

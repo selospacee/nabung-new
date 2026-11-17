@@ -228,7 +228,7 @@ export function SettingsPage() {
 
                         {/* CSV export */}
                         <Button variant="ghost" className="ml-0 text-sm" onClick={() => {
-                          window.location.href = '/reports'
+                          window.location.href = '/#reports'
                         }}>
                           <Download className="w-4 h-4 mr-1" />
                           Export Transactions to CSV

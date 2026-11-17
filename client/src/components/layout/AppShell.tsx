@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   Tag,
   LineChart,
-  PieChart,
   Wallet,
   Settings,
   Plus,
@@ -38,7 +37,6 @@ import { useAccounts, useCategories, useDefaultAccount, useTransactions, useAcco
 const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/budgets', icon: LineChart, label: 'Budgets & Categories' },
-  { to: '/reports', icon: PieChart, label: 'Reports' },
   { to: '/groups', icon: Users, label: 'Nabung Bareng' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ]
@@ -47,7 +45,6 @@ const NAV_ITEMS = [
 const MOBILE_NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/budgets', icon: LineChart, label: 'Budgets' },
-  { to: '/reports', icon: PieChart, label: 'Reports' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ]
 
@@ -124,7 +121,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      {/* Mobile bottom navigation: 5 slots (Dashboard, Budgets, +, Reports, Settings) */}
+      {/* Mobile bottom navigation: slots (Dashboard, Budgets, +, Bareng, Settings) */}
             <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden border-t border-border bg-card/95 backdrop-blur-sm">
               <div className="flex items-center justify-between px-2 py-1.5 w-full">
                 <div className="flex items-center justify-around w-full">
@@ -165,19 +162,6 @@ export function AppShell({ children }: { children: ReactNode }) {
                                                         <Plus className="w-[60px] h-[60px]" />
                                                       </Button>
 
-                  {/* Reports - slot 4 */}
-                  <NavLink
-                    to="/reports"
-                    className={cn(
-                      'flex flex-col items-center gap-1 px-1 py-2 rounded-lg text-xs font-medium transition-colors',
-                      location.pathname.startsWith('/reports')
-                        ? 'text-primary'
-                        : 'text-muted-foreground'
-                    )}
-                  >
-                    <PieChart className="w-5 h-5" />
-                    Reports
-                  </NavLink>
 
                   {/* Nabung Bareng - slot 5 */}
                   <NavLink
