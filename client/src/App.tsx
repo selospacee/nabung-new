@@ -1,11 +1,10 @@
 import { AppShell } from './components/layout/AppShell'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { TransactionsPage } from './pages/TransactionsPage'
 import { AccountsPage } from './pages/AccountsPage'
 import { BudgetsPage } from './pages/BudgetsPage'
-import { ReportsPage } from './pages/ReportsPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { GroupsPage } from './pages/GroupsPage'
 import { GroupDetailPage } from './pages/GroupDetailPage'
@@ -45,7 +44,7 @@ function AppRoutes() {
                         <Route path="/transactions/new" element={<TransactionsPage />} />
                         <Route path="/accounts" element={<AccountsPage />} />
                         <Route path="/budgets" element={<BudgetsPage />} />
-                        <Route path="/reports" element={<ReportsPage />} />
+                        <Route path="/reports" element={<Navigate to="/" replace />} />
                         <Route path="/settings" element={<SettingsPage />} />
                         <Route path="/groups" element={<GroupsPage />} />
                         <Route path="/groups/:groupId" element={<GroupDetailPage />} />

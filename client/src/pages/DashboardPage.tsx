@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RePieChart, Pie, Cell } from 'recharts'
 import { useNavigate } from 'react-router-dom'
+import { ReportsSection } from './ReportsPage'
 
 export function DashboardPage() {
   const { user: authUser } = useSupabaseAuth()
@@ -389,6 +390,12 @@ export function DashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Laporan (dulunya halaman Reports) */}
+      <section id="reports" ref={el => { if (el && window.location.hash === '#reports') el.scrollIntoView() }} className="space-y-4 pt-2">
+        <h2 className="text-lg font-semibold">Reports</h2>
+        <ReportsSection />
+      </section>
     </div>
   )
 }
