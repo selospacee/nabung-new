@@ -3,6 +3,7 @@ import { requestSync, enableAutoRetry } from '../db/sync'
 import { subscribeRealtime } from '../db/syncRealtime'
 import { patchSyncState } from '../db/syncStatus'
 import { useCurrentUser } from '../db/hooks'
+import { seedDefaultsIfEmpty } from '../db/seedDefaults'
 
 const POLL_MS = 30_000
 
@@ -36,7 +37,12 @@ export function useAutoSync(enabled = true) {
     window.addEventListener('offline', onOffline)
     document.addEventListener('visibilitychange', onVisible)
 
-    trigger('initial')
+    // Sinkron awal; bila pull sukses dan akun masih kosong, isi kategori/akun bawaan lalu sinkron lagi.
+    requestSync(userId, 'initial')
+      .then(async result => {
+        if (result?.pull.ok && (await seedDefaultsIfEmpty(userId))) trigger('seed')
+      })
+      .catch(error => console.error('[AutoSync] initial', error))
 
     return () => {
       clearInterval(poll)
