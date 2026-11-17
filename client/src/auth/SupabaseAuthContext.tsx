@@ -35,6 +35,30 @@ interface SupabaseAuthContextType {
 
 const SupabaseAuthContext = createContext<SupabaseAuthContextType | null>(null)
 
+/**
+ * Pengguna yang sudah punya profil dianggap sudah onboarding. Baris user_settings yang hilang
+ * atau bernilai false diperbaiki menjadi true, supaya login tidak macet di halaman onboarding.
+ * (`.single()` pada baris yang tidak ada mengembalikan error, bukan melempar, jadi tidak boleh
+ * mengandalkan blok catch.)
+ */
+async function ensureOnboarded(userId: string): Promise<boolean> {
+  try {
+    const { data } = await supabase
+      .from('user_settings')
+      .select('is_onboarded')
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (data?.is_onboarded) return true
+    const { error } = await supabase
+      .from('user_settings')
+      .upsert({ user_id: userId, is_onboarded: true })
+    if (error) console.warn('[Auth] Could not mark onboarded:', error.message)
+  } catch (err) {
+    console.warn('[Auth] ensureOnboarded failed:', err)
+  }
+  return true
+}
+
 export function SupabaseAuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -118,22 +142,7 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
       
         if (profile) {
           console.log('[Auth] Profile found:', profile.id)
-          let isOnboardedValue = false
-          try {
-            const { data: onboarded } = await Promise.race([
-              supabase.from('user_settings').select('is_onboarded').eq('user_id', userId).single(),
-              timeoutPromise<never>(10000, 'Settings fetch timeout')
-            ])
-            isOnboardedValue = onboarded?.is_onboarded ?? false
-          } catch (settingsError) {
-            // user_settings doesn't exist - create it with onboarded=true for returning users
-            console.log('[Auth] No user_settings found, creating with onboarded=true')
-            await supabase.from('user_settings').insert({
-              user_id: userId,
-              is_onboarded: true,
-            })
-            isOnboardedValue = true
-          }
+          const isOnboardedValue = await ensureOnboarded(userId)
         
           setUser({
             id: profile.id,
@@ -163,21 +172,7 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
             if (newProfile) {
               profileCreated = true
               // Profile found, process it normally
-              let isOnboardedValue = false
-              try {
-                const { data: onboarded } = await Promise.race([
-                  supabase.from('user_settings').select('is_onboarded').eq('user_id', userId).single(),
-                  timeoutPromise<never>(10000, 'Settings fetch timeout')
-                ])
-                isOnboardedValue = onboarded?.is_onboarded ?? false
-              } catch (settingsError) {
-                console.log('[Auth] No user_settings found, creating with onboarded=true')
-                await supabase.from('user_settings').insert({
-                  user_id: userId,
-                  is_onboarded: true,
-                })
-                isOnboardedValue = true
-              }
+              const isOnboardedValue = await ensureOnboarded(userId)
 
               setUser({
                 id: newProfile.id,
@@ -462,6 +457,7 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
                 user_id: loginData.session.user.id,
                 is_onboarded: true,
               }).then(() => {})
+              setIsOnboarded(true)
               // Push any local changes to Supabase (non-blocking)
               const pushResult = await pushLocalChangesToSupabase(loginData.session.user.id)
               if (!pushResult.success) {

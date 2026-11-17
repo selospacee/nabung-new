@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useSupabaseAuth } from '../auth/SupabaseAuthContext'
 import { Button } from '../components/ui'
 import { Input, Select } from '../components/ui'
@@ -34,6 +35,8 @@ const TIMEZONES = [
 export function OnboardingPage() {
   const { login, signUp, isLoading } = useSupabaseAuth()
   const { run, pending: loading } = useAsyncAction()
+  const navigate = useNavigate()
+  const location = useLocation()
   const [mode, setMode] = useState<'login' | 'signUp'>('signUp')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -66,6 +69,8 @@ export function OnboardingPage() {
           if (!password) throw new Error('Password is required')
           await signUp(email.trim(), password, name.trim(), currency, timezone)
         }
+        // Setelah masuk, mulai dari dashboard (kecuali sedang membuka tautan undangan grup).
+        if (!location.pathname.startsWith('/join/')) navigate('/', { replace: true })
       } catch (err: any) {
         console.error('[Onboarding] Error:', err)
         setError(err?.message || 'Failed to authenticate')
