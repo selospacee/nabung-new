@@ -52,6 +52,8 @@ const h = vi.hoisted(() => {
       eq: () => q,
       order: () => q,
       limit: () => q,
+      range: () => q,
+      in: () => q,
       single: async () => result,
       maybeSingle: async () => result,
       then: (onFulfilled: any, onRejected: any) => Promise.resolve(result).then(onFulfilled, onRejected),
@@ -72,9 +74,13 @@ const h = vi.hoisted(() => {
       inserts.push({ table, payload })
       return { error: null }
     },
-    upsert: async (payload: Record<string, unknown>) => {
+    // Meniru builder PostgREST: `await upsert(...)` atau `upsert(...).select('id').single()`.
+    upsert: (payload: Record<string, unknown>) => {
       upserts.push({ table, payload })
-      return { error: table === 'accounts' ? upsertError.value : null }
+      const error = table === 'accounts' ? upsertError.value : null
+      return Object.assign(Promise.resolve({ error }), {
+        select: () => ({ single: async () => ({ data: { id: payload.id }, error }) }),
+      })
     },
     update: () => thenable({ data: null, error: null }),
     delete: () => thenable({ data: null, error: null }),
@@ -102,13 +108,27 @@ const h = vi.hoisted(() => {
   }
 
   const dexieTable = (name: string) => ({
+    bulkGet: async (ids: unknown[]) => ids.map(() => undefined),
+    get: async (id: string) => (name === 'accounts' ? localAccounts.find(r => r.id === id) : undefined),
+    update: async (id: string, changes: Record<string, unknown>) => {
+      const row = name === 'accounts' ? localAccounts.find(r => r.id === id) : undefined
+      if (row) Object.assign(row, changes)
+      return row ? 1 : 0
+    },
     bulkPut: async () => {},
-    where: () => ({
-      equals: () => ({ toArray: async () => (name === 'accounts' ? localAccounts : []) }),
+    where: (index: string) => ({
+      equals: (value: unknown) => ({
+        toArray: async () =>
+          (name === 'accounts' ? localAccounts : []).filter(row => row[index] === value),
+      }),
     }),
   })
 
   const db = {
+    // Meniru Dexie: penulisan dari pull berjalan di dalam transaksi.
+    transaction: async (_mode: string, _tables: unknown, fn: (tx: object) => unknown) => fn({}),
+    // Penanda pull bertahap: kosong = pull penuh.
+    syncMeta: { get: async () => undefined, put: async () => {} },
     users: { put: async () => {} },
     accounts: dexieTable('accounts'),
     categories: dexieTable('categories'),
@@ -145,9 +165,10 @@ beforeEach(() => {
   h.authState.signedIn = false
   h.localAccounts.length = 0
   // These are what sync.ts writes back into Dexie after pulling the 2 accounts created by signup.
+  // Baris yang baru dibuat lokal, sehingga ditandai dirty (penanda _dirty dari hook stempel).
   h.localAccounts.push(
-    { id: '00000000-0000-4000-8000-000000000001', userId: h.USER, name: 'Cash', type: 'cash', currency: 'IDR', icon: 'Wallet', color: '#10B981', createdAt: h.NOW },
-    { id: '00000000-0000-4000-8000-000000000002', userId: h.USER, name: 'Bank Account', type: 'bank', currency: 'IDR', icon: 'Building2', color: '#3B82F6', createdAt: h.NOW },
+    { id: '00000000-0000-4000-8000-000000000001', userId: h.USER, name: 'Cash', type: 'cash', currency: 'IDR', icon: 'Wallet', color: '#10B981', createdAt: h.NOW, _dirty: 1 },
+    { id: '00000000-0000-4000-8000-000000000002', userId: h.USER, name: 'Bank Account', type: 'bank', currency: 'IDR', icon: 'Building2', color: '#3B82F6', createdAt: h.NOW, _dirty: 1 },
   )
   logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
   errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})

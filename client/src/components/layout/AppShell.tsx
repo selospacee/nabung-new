@@ -32,6 +32,7 @@ import { useState } from 'react'
 import { useCurrentUser } from '../../db/hooks'
 import { AddTransactionModal } from '../AddTransactionModal'
 import { useAutoSync } from '../../hooks/useAutoSync'
+import { SyncIndicator } from '../sync/SyncStatus'
 import { useAccounts, useCategories, useDefaultAccount, useTransactions, useAccountBalances } from '../../db/hooks'
 
 const NAV_ITEMS = [
@@ -220,6 +221,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               return location.pathname.startsWith(item.to)
             })?.label || 'Nabung'}
           </h2>
+          <SyncIndicator />
         </div>
         {children}
               </main>

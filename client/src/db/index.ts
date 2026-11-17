@@ -1,14 +1,28 @@
 import Dexie, { type Table } from 'dexie'
 import type { User, Account, Category, Transaction, Budget, SavingsGoal, Cashier } from '../types'
+import { installStampHooks, markRemoteTx, SYNCED_TABLES } from './stamps'
+
+/** Penanda sinkronisasi per baris: _dirty = 1 berarti belum terkirim ke server. */
+export type SyncMeta = { _dirty?: 0 | 1 }
+
+/** Kursor pull per (user, tabel). cursor = updated_at server tertinggi yang sudah di-apply. */
+export interface SyncMetaRow {
+  key: string
+  cursor: string | null
+  /** Waktu (ISO, jam perangkat) pull penuh terakhir yang selesai. Dipakai untuk jaring pengaman N jam. */
+  lastFullAt: string | null
+}
 
 class NabungDB extends Dexie {
   users!: Table<User, string>
-  accounts!: Table<Account, string>
-  categories!: Table<Category, string>
-  transactions!: Table<Transaction, string>
-  budgets!: Table<Budget, string>
-  goals!: Table<SavingsGoal, string>
-  cashiers!: Table<Cashier, string>
+  accounts!: Table<Account & SyncMeta, string>
+  categories!: Table<Category & SyncMeta, string>
+  transactions!: Table<Transaction & SyncMeta, string>
+  budgets!: Table<Budget & SyncMeta, string>
+  goals!: Table<SavingsGoal & SyncMeta, string>
+  cashiers!: Table<Cashier & SyncMeta, string>
+  /** Penanda pull bertahap per (user, tabel): key = `${userId}:${table}`. */
+  syncMeta!: Table<SyncMetaRow, string>
 
   constructor() {
     super('nabung-db')
@@ -21,6 +35,45 @@ class NabungDB extends Dexie {
       goals: 'id, userId',
       cashiers: 'id, userId, isActive',
     })
+    // v4: indeks _dirty untuk push delta, dan stempel updatedAt untuk semua tabel yang disinkronkan.
+    this.version(4)
+      .stores({
+        users: 'id, email',
+        accounts: 'id, userId, type, _dirty',
+        categories: 'id, userId, type, parentId, _dirty',
+        transactions: 'id, userId, accountId, categoryId, cashierId, date, type, deletedAt, latitude, longitude, _dirty',
+        budgets: 'id, userId, categoryId, yearMonth, _dirty',
+        goals: 'id, userId, _dirty',
+        cashiers: 'id, userId, isActive, _dirty',
+      })
+      .upgrade(tx => {
+        // Data lama belum tentu sudah terkirim: tandai semua sebagai dirty. Push tetap aman
+        // karena server menang bila versinya lebih baru. Penulisan ini dari upgrade, bukan user,
+        // sehingga stempel tidak boleh digeser: updatedAt lama dipertahankan.
+        markRemoteTx(tx)
+        return Promise.all(
+          SYNCED_TABLES.map(name =>
+            tx.table(name).toCollection().modify((row: Record<string, unknown>) => {
+              row._dirty = 1
+              if (!row.updatedAt) row.updatedAt = (row.createdAt as string) ?? new Date().toISOString()
+            }),
+          ),
+        )
+      })
+    // v5: penghapusan lunak (deleted_at) untuk akun, kategori, budget, goal, cashier; penanda pull bertahap.
+    this.version(5).stores({
+      users: 'id, email',
+      accounts: 'id, userId, type, deletedAt, _dirty',
+      categories: 'id, userId, type, parentId, deletedAt, _dirty',
+      transactions: 'id, userId, accountId, categoryId, cashierId, date, type, deletedAt, latitude, longitude, _dirty',
+      budgets: 'id, userId, categoryId, yearMonth, deletedAt, _dirty',
+      goals: 'id, userId, deletedAt, _dirty',
+      cashiers: 'id, userId, isActive, deletedAt, _dirty',
+      syncMeta: 'key',
+    })
+    for (const name of SYNCED_TABLES) {
+      installStampHooks(this[name] as unknown as { hook: (...args: any[]) => any })
+    }
   }
 }
 

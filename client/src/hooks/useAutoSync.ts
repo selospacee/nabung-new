@@ -1,101 +1,55 @@
-import { useEffect, useRef } from 'react'
-import { supabase } from '../lib/supabase'
-import { syncUserDataFromSupabase, pushLocalChangesToSupabase } from '../db/sync'
+import { useEffect } from 'react'
+import { requestSync, enableAutoRetry } from '../db/sync'
+import { subscribeRealtime } from '../db/syncRealtime'
+import { patchSyncState } from '../db/syncStatus'
 import { useCurrentUser } from '../db/hooks'
 
-type RealtimePayload = {
-  eventType: 'INSERT' | 'UPDATE' | 'DELETE'
-  new: Record<string, any> | null
-  old: Record<string, any> | null
-}
+const POLL_MS = 30_000
 
+/**
+ * Memicu sinkronisasi lewat antrean tunggal (pull lalu push). Pemicu: mount, polling 30 detik,
+ * fokus tab, online, visibilitychange, event realtime (digabung), dan reconnect realtime.
+ */
 export function useAutoSync(enabled = true) {
   const { userId } = useCurrentUser()
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
-  const channelRef = useRef<any>(null)
-  const isSyncingRef = useRef(false)
-  const pushIntervalRef = useRef<NodeJS.Timeout | null>(null)
-
-  const doSync = async (source: string) => {
-    if (!userId || isSyncingRef.current) return
-    isSyncingRef.current = true
-    try {
-      console.log(`[AutoSync] ${source} sync for user:`, userId)
-      await syncUserDataFromSupabase(userId)
-      console.log(`[AutoSync] ${source} sync complete`)
-    } catch (error) {
-      console.error(`[AutoSync] ${source} sync error:`, error)
-    } finally {
-      isSyncingRef.current = false
-    }
-  }
-
-  const doPush = async (source: string) => {
-    if (!userId) return
-    try {
-      console.log(`[AutoSync] ${source} push for user:`, userId)
-      const result = await pushLocalChangesToSupabase(userId)
-      if (result.success) {
-        console.log(`[AutoSync] ${source} push complete`)
-      } else {
-        console.warn(`[AutoSync] ${source} push had errors:`, result.errors)
-      }
-    } catch (error) {
-      console.error(`[AutoSync] ${source} push error:`, error)
-    }
-  }
 
   useEffect(() => {
     if (!enabled || !userId) return
+    enableAutoRetry(true)
 
-    // 1. Initial sync on mount (pull from Supabase)
-    doSync('initial')
-
-    // 2. Periodic sync every 30 seconds (pull from Supabase)
-    intervalRef.current = setInterval(() => {
-      doSync('periodic')
-    }, 30_000)
-
-    // 2b. Periodic push every 60 seconds (push local changes to Supabase)
-    pushIntervalRef.current = setInterval(() => {
-      doPush('periodic')
-    }, 60_000)
-
-    // 3. Supabase Realtime for instant sync (pull from Supabase)
-    channelRef.current = supabase
-      .channel(`sync:${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload: RealtimePayload) => {
-          console.log('[AutoSync] Realtime change:', payload.eventType, payload.new?.id || payload.old?.id)
-          // Debounce rapid changes
-          setTimeout(() => doSync('realtime'), 500)
-        }
-      )
-      .subscribe()
-
-    // 4. Sync when window gains focus (user switched back to tab) - pull AND push
-    const handleFocus = () => {
-      doSync('focus')
-      doPush('focus')
+    const trigger = (reason: string) => {
+      requestSync(userId, reason).catch(error => console.error('[AutoSync]', reason, error))
     }
-    window.addEventListener('focus', handleFocus)
+
+    const unsubscribeRealtime = subscribeRealtime(userId, trigger)
+    const poll = setInterval(() => trigger('poll'), POLL_MS)
+
+    const onFocus = () => trigger('focus')
+    const onOnline = () => trigger('online')
+    const onOffline = () => patchSyncState({ phase: 'offline' })
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') trigger('visible')
+    }
+
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
+    document.addEventListener('visibilitychange', onVisible)
+
+    trigger('initial')
 
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
-      if (pushIntervalRef.current) clearInterval(pushIntervalRef.current)
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
-      }
-      window.removeEventListener('focus', handleFocus)
+      clearInterval(poll)
+      unsubscribeRealtime()
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('offline', onOffline)
+      document.removeEventListener('visibilitychange', onVisible)
+      enableAutoRetry(false)
     }
   }, [enabled, userId])
 
-  // Expose manual sync trigger
-  return { syncNow: () => { doSync('manual'); doPush('manual') } }
+  return {
+    syncNow: () => (userId ? requestSync(userId, 'manual') : Promise.resolve(null)),
+  }
 }

@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { useSupabaseAuth } from '../auth/SupabaseAuthContext'
 import { useCurrentUser, useCurrentUser as useCU } from '../db/hooks'
 import { db } from '../db'
-import { syncUserDataFromSupabase, pushLocalChangesToSupabase } from '../db/sync'
+import { requestSync } from '../db/sync'
+import { SyncPanel } from '../components/sync/SyncStatus'
 import { cn, Card, CardHeader, CardTitle, CardContent, Button, Input, Select, Alert, Progress, EmptyState } from '../components/ui'
 import { formatCurrency } from '../utils/currency'
-import { TrendingUp, User, Mail, DollarSign, Globe, Shield, Database, Download, Upload, Trash2, Moon, Sun, Monitor, RefreshCw, CloudUpload, CloudDownload, AlertCircle, CheckCircle } from 'lucide-react'
+import { TrendingUp, User, Mail, DollarSign, Globe, Shield, Database, Download, Upload, Trash2, Moon, Sun, Monitor, CloudUpload } from 'lucide-react'
 import { differenceInYears } from 'date-fns'
 
 export function SettingsPage() {
@@ -15,38 +16,18 @@ export function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [exporting, setExporting] = useState(false)
-  const [syncing, setSyncing] = useState<'push' | 'pull' | 'idle'>('idle')
-  const [syncResult, setSyncResult] = useState<{ success: boolean; message: string; errors?: any[] } | null>(null)
+  const [syncing, setSyncing] = useState(false)
 
   const currency = user?.currency || 'IDR'
 
-  const handleSync = async (direction: 'push' | 'pull') => {
-    if (!user?.id) return
-    setSyncing(direction)
-    setSyncResult(null)
+  // Satu antrean sinkron: pull lalu push. Galat ditampilkan di SyncPanel, tidak disembunyikan.
+  const handleSync = async () => {
+    if (!user?.id || syncing) return
+    setSyncing(true)
     try {
-      if (direction === 'push') {
-        const result = await pushLocalChangesToSupabase(user.id)
-        setSyncResult({
-          success: result.success,
-          message: result.success ? 'Push to Supabase completed' : 'Push failed',
-          errors: result.errors
-        })
-      } else {
-        await syncUserDataFromSupabase(user.id)
-        setSyncResult({
-          success: true,
-          message: 'Pull from Supabase completed'
-        })
-      }
-    } catch (err: any) {
-      setSyncResult({
-        success: false,
-        message: err.message || 'Sync failed',
-        errors: [{ table: 'unknown', message: err.message }]
-      })
+      await requestSync(user.id, 'manual')
     } finally {
-      setSyncing('idle')
+      setSyncing(false)
     }
   }
 
@@ -271,72 +252,14 @@ export function SettingsPage() {
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        <div className="flex flex-wrap gap-3">
-                          <Button
-                            variant="outline"
-                            onClick={() => handleSync('push')}
-                            disabled={syncing !== 'idle'}
-                          >
-                            {syncing === 'push' ? (
-                              <>
-                                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                                Pushing...
-                              </>
-                            ) : (
-                              <>
-                                <CloudUpload className="w-4 h-4 mr-2" />
-                                Push Local to Supabase
-                              </>
-                            )}
-                          </Button>
-                          <Button
-                            variant="outline"
-                            onClick={() => handleSync('pull')}
-                            disabled={syncing !== 'idle'}
-                          >
-                            {syncing === 'pull' ? (
-                              <>
-                                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                                Pulling...
-                              </>
-                            ) : (
-                              <>
-                                <CloudDownload className="w-4 h-4 mr-2" />
-                                Pull from Supabase
-                              </>
-                            )}
-                          </Button>
-                        </div>
-
-                        {syncResult && (
-                          <Alert variant={syncResult.success ? 'success' : 'destructive'} className="gap-3">
-                            {syncResult.success ? (
-                              <CheckCircle className="w-4 h-4 text-success shrink-0" />
-                            ) : (
-                              <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium">{syncResult.message}</p>
-                              {syncResult.errors && syncResult.errors.length > 0 && (
-                                <div className="mt-2 text-xs text-muted-foreground">
-                                  <ul className="list-disc list-inside space-y-1 max-h-40 overflow-y-auto">
-                                    {syncResult.errors.map((e, i) => (
-                                      <li key={i}>{e.table}: {e.message}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-                            </div>
-                          </Alert>
-                        )}
+                        <SyncPanel onSyncNow={handleSync} busy={syncing} />
 
                         <div className="p-3 rounded-lg bg-secondary text-sm text-muted-foreground">
-                          <p className="font-medium text-foreground mb-1">How sync works:</p>
+                          <p className="font-medium text-foreground mb-1">Cara kerja sinkron:</p>
                           <ul className="list-disc list-inside space-y-0.5">
-                            <li><strong>Push</strong> — Upload local changes (transactions, accounts, etc.) to Supabase</li>
-                            <li><strong>Pull</strong> — Download latest data from Supabase to this device</li>
-                            <li>Auto-sync runs every 60s (push) and 30s (pull), plus on window focus</li>
-                            <li>If push fails, check console for RLS policy errors</li>
+                            <li>Setiap sinkron menarik perubahan dari server dulu, lalu mengirim perubahan lokal.</li>
+                            <li>Perubahan yang belum terkirim tetap tersimpan di perangkat dan dicoba lagi otomatis.</li>
+                            <li>Sinkron berjalan saat tab difokuskan, saat online kembali, dan setiap 30 detik.</li>
                           </ul>
                         </div>
                       </CardContent>

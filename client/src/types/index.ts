@@ -20,6 +20,7 @@ export interface Account {
   icon: string
   color: string
   createdAt: string
+  deletedAt?: string | null
 }
 
 export interface Category {
@@ -32,6 +33,7 @@ export interface Category {
   parentId: string | null
   sortOrder: number
   merchantPatterns: string[]
+  deletedAt?: string | null
 }
 
 export interface Cashier {
@@ -47,6 +49,7 @@ export interface Cashier {
   merchantName: string | null
   createdAt: string
   updatedAt: string
+  deletedAt?: string | null
 }
 
 export interface Transaction {
@@ -60,7 +63,8 @@ export interface Transaction {
   type: 'income' | 'expense' | 'transfer'
   date: string
   description: string
-  merchant: string
+  // Deprecated: no longer shown or written. Kept optional so old local rows still type-check.
+  merchant?: string | null
   notes: string
   receiptImage: string | null
   receiptOcrText: string | null
@@ -81,6 +85,8 @@ export interface Budget {
   alertThreshold: number
   rollover: boolean
   createdAt: string
+  updatedAt?: string
+  deletedAt?: string | null
 }
 
 export interface SavingsGoal {
@@ -93,4 +99,5 @@ export interface SavingsGoal {
   color: string
   icon: string
   createdAt: string
+  deletedAt?: string | null
 }

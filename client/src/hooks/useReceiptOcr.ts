@@ -5,7 +5,6 @@ import { displayToCents } from '../utils/currency'
 export interface OcrResult {
   text: string
   confidence: number
-  merchant: string | null
   total: number | null
   date: string | null
   suggestedType: 'income' | 'expense' | 'transfer'
@@ -67,6 +66,8 @@ export function useReceiptOcr(categories: CategoryPattern[] = []) {
         // Parse merchant, total, date
         const parsed = parseReceiptText(rawText, rawLines)
 
+        // Merchant name is parsed only to guess the category (merchantPatterns);
+        // it is intentionally not returned or displayed.
         // Find suggested category based on merchant patterns
         const suggestedCategoryId = findCategoryFromPatterns(categories, parsed.merchant || '', rawText)
 
@@ -75,7 +76,9 @@ export function useReceiptOcr(categories: CategoryPattern[] = []) {
         return {
           text: rawText,
           confidence: result.data.confidence,
-          ...parsed,
+          total: parsed.total,
+          date: parsed.date,
+          suggestedType: parsed.suggestedType,
           suggestedCategoryId,
           rawLines,
         }

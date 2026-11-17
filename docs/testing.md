@@ -89,6 +89,18 @@ brought in line with the live database (missing `cashiers`, `transactions.cashie
 four `updated_at` columns added on 2026-10-15). The trigger/column case in the same file was
 released from `it.fails` by that migration and is now a real passing regression guard.
 
+### Merchant field (removed from the UI)
+
+The merchant name is no longer shown, typed into a form, exported, or written to Dexie or the server.
+The `transactions.merchant` column and its `ALLOWED_KEYS` entry are kept, and the push sends `merchant: null`.
+Some tests were updated for this, and each change is explained in its commit message:
+
+- `useReceiptOcr.test.ts`: asserts that `merchant` is not returned and that the raw OCR text still contains the store name, instead of asserting the parsed merchant.
+- `sync.push.test.ts`: a new case checks that the transactions payload sends `merchant: null`.
+- `useSpeechToText.test.ts`: a new case checks that `parsed` has no `merchant` and that `description` keeps the spoken text.
+
+The OCR and speech parsers still extract a merchant name internally, only to guess the category through `merchantPatterns`.
+
 ## Known pre-existing tsc errors
 
 `npx tsc -b --noEmit` reports **0 errors** on `main`. The five errors that used to sit in

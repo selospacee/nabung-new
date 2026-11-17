@@ -85,7 +85,7 @@ CREATE TABLE budgets (
   category_id UUID REFERENCES categories(id) ON DELETE CASCADE NOT NULL,
   year_month TEXT NOT NULL, -- Format: 'YYYY-MM'
   limit_amount DECIMAL(15, 2) NOT NULL,
-  alert_threshold DECIMAL(3, 2) DEFAULT 0.8,
+  alert_threshold INTEGER DEFAULT 80, -- percentage, 0-100
   rollover BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
