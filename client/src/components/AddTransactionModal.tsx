@@ -10,6 +10,7 @@ import { useCameraStream } from '../hooks/useCameraStream'
 import { useAsyncAction } from '../hooks/useAsyncAction'
 import type { Transaction as TxType } from '../types'
 import { db } from '../db'
+import { CategoryQuickAddDialog } from './CategoryQuickAddDialog'
 import { pushAndReport } from '../db/pushAndReport'
 import { pickCategoryId } from '../utils/pickCategory'
 import { guessType, suggestCategory } from '../utils/autoCategory'
@@ -99,6 +100,7 @@ export function AddTransactionModal({
   const [ocrResult, setOcrResult] = useState<any>(null)
   const [receiptImage, setReceiptImage] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [showNewCategory, setShowNewCategory] = useState(false)
   const [captureError, setCaptureError] = useState<string | null>(null)
   const [prefillNotice, setPrefillNotice] = useState<string | null>(null)
 
@@ -690,14 +692,25 @@ export function AddTransactionModal({
                 {accounts?.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </Select>
 
-              <Select label="Category" value={form.categoryId} onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))}>
-                <option value="">Select category</option>
-                {categories?.filter(c => {
-                  if (form.type === 'transfer') return c.type === 'transfer'
-                  if (form.type === 'income') return c.type === 'income'
-                  return c.type === 'expense'
-                }).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </Select>
+              <div>
+                <Select label="Category" value={form.categoryId} onChange={e => setForm(f => ({ ...f, categoryId: e.target.value }))}>
+                  <option value="">Select category</option>
+                  {categories?.filter(c => {
+                    if (form.type === 'transfer') return c.type === 'transfer'
+                    if (form.type === 'income') return c.type === 'income'
+                    return c.type === 'expense'
+                  }).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </Select>
+                {form.type !== 'transfer' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowNewCategory(true)}
+                    className="mt-1 text-xs font-medium text-primary hover:underline"
+                  >
+                    + Kategori {form.type === 'income' ? 'income' : 'expense'} baru
+                  </button>
+                )}
+              </div>
 
               <Input
                 label="Description"
@@ -745,6 +758,17 @@ export function AddTransactionModal({
             </form>
           </TabsContent>
         </Tabs>
+
+        {form.type !== 'transfer' && (
+          <CategoryQuickAddDialog
+            open={showNewCategory}
+            onClose={() => setShowNewCategory(false)}
+            type={form.type === 'income' ? 'income' : 'expense'}
+            userId={userId}
+            categories={(categories || []) as any[]}
+            onCreated={id => setForm(f => ({ ...f, categoryId: id }))}
+          />
+        )}
 
         {/* Receipt result */}
         <Dialog open={showReceiptDialog} onClose={() => { setShowReceiptDialog(false); setOcrResult(null) }}>
