@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { v4 as uuid } from 'uuid'
 import { cn, Button, Dialog, Input, Select, Textarea, Alert, Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui'
 import { formatCurrency, displayToCents } from '../utils/currency'
@@ -12,6 +12,7 @@ import type { Transaction as TxType } from '../types'
 import { db } from '../db'
 import { pushAndReport } from '../db/pushAndReport'
 import { pickCategoryId } from '../utils/pickCategory'
+import { guessType, suggestCategory } from '../utils/autoCategory'
 
 type TxTypeName = TxType['type']
 
@@ -80,6 +81,7 @@ export function AddTransactionModal({
   accounts,
   categories,
   defaultAccount,
+  transactions,
   onTransactionAdded,
 }: AddTransactionModalProps) {
   const currency = user?.currency || 'IDR'
@@ -103,6 +105,23 @@ export function AddTransactionModal({
   // Voice
   const voiceCtx = useSpeechToText(categories || [])
   const stopVoice = voiceCtx.stopListening
+
+  // Saran jenis + kategori otomatis dari isi struk / ucapan (riwayat transaksi ikut dipakai).
+  const receiptGuess = useMemo(() => {
+    if (!ocrResult) return null
+    const type: TxTypeName = ocrResult.suggestedType || 'expense'
+    const categoryId = suggestCategory(ocrResult.text || '', type, categories || [], transactions || []) ?? ocrResult.suggestedCategoryId ?? null
+    return { type, categoryId: pickCategoryId(categories, type, categoryId) }
+  }, [ocrResult, categories, transactions])
+
+  const voiceGuess = useMemo(() => {
+    const text = voiceCtx.transcript
+    const type: TxTypeName = guessType(text)
+    const categoryId = suggestCategory(text, type, categories || [], transactions || []) ?? voiceCtx.parsed.suggestedCategoryId ?? null
+    return { type, categoryId: pickCategoryId(categories, type, categoryId) }
+  }, [voiceCtx.transcript, voiceCtx.parsed.suggestedCategoryId, categories, transactions])
+
+  const categoryName = (id: string | null | undefined) => (categories || []).find(c => c.id === id)?.name || '—'
 
   // Manual form. Accounts load asynchronously, so the default account is applied as soon as it exists.
   const defaultAccountId = defaultAccount?.id || accounts?.[0]?.id || ''
@@ -225,10 +244,10 @@ export function AddTransactionModal({
     if (!ocrResult) return
     setForm(f => ({
       ...f,
-      type: ocrResult.suggestedType || 'expense',
+      type: receiptGuess?.type || 'expense',
       amount: ocrResult.total ? String(ocrResult.total / 100) : '',
       date: ocrResult.date || toISODate(new Date()),
-      categoryId: pickCategoryId(categories, ocrResult.suggestedType || 'expense', ocrResult.suggestedCategoryId),
+      categoryId: receiptGuess?.categoryId || '',
       description: '',
       receiptImage,
       receiptOcrText: ocrResult.text ?? null,
@@ -249,10 +268,10 @@ export function AddTransactionModal({
     const p = voiceCtx.parsed
     setForm(f => ({
       ...f,
-      type: p.suggestedType || 'expense',
+      type: voiceGuess.type,
       amount: p.amount ? String(p.amount / 100) : '',
       date: p.date || toISODate(new Date()),
-      categoryId: pickCategoryId(categories, p.suggestedType || 'expense', p.suggestedCategoryId),
+      categoryId: voiceGuess.categoryId,
       description: p.description || voiceCtx.transcript || '',
       receiptImage: null,
       receiptOcrText: null,
@@ -301,10 +320,10 @@ export function AddTransactionModal({
     if (!saveAccountId) { alert('Belum ada akun. Buat akun dulu di menu Budgets & Categories / Accounts.'); return }
     try {
     await addTransaction({
-      type: ocrResult.suggestedType || 'expense',
+      type: receiptGuess?.type || 'expense',
       amount: ocrResult.total,
       date: ocrResult.date || toISODate(new Date()),
-      categoryId: pickCategoryId(categories, ocrResult.suggestedType || 'expense', ocrResult.suggestedCategoryId) || null,
+      categoryId: receiptGuess?.categoryId || null,
       accountId: saveAccountId,
       description: '',
       notes: '',
@@ -332,10 +351,10 @@ export function AddTransactionModal({
     if (!saveAccountId) { alert('Belum ada akun. Buat akun dulu di menu Accounts.'); return }
     try {
     await addTransaction({
-      type: p.suggestedType || 'expense',
+      type: voiceGuess.type,
       amount: p.amount,
       date: p.date || toISODate(new Date()),
-      categoryId: pickCategoryId(categories, p.suggestedType || 'expense', p.suggestedCategoryId) || null,
+      categoryId: voiceGuess.categoryId || null,
       accountId: saveAccountId,
       description: p.description || '',
       notes: '',
@@ -599,6 +618,10 @@ export function AddTransactionModal({
                         <span className="font-mono">{voiceCtx.parsed.date}</span>
                       </div>
                       <div className="flex justify-between">
+                        <span className="text-muted-foreground">Category:</span>
+                        <span>{categoryName(voiceGuess.categoryId)} <span className="text-xs text-muted-foreground">({voiceGuess.type})</span></span>
+                      </div>
+                      <div className="flex justify-between">
                         <span className="text-muted-foreground">Description:</span>
                         <span>{voiceCtx.parsed.description || '—'}</span>
                       </div>
@@ -752,6 +775,12 @@ export function AddTransactionModal({
                     <div className="p-3 rounded-lg border border-border bg-card">
                       <span className="text-xs text-muted-foreground">Total</span>
                       <p className="font-mono font-semibold text-income text-sm mt-0.5">{formatCurrency(ocrResult.total, currency)}</p>
+                    </div>
+                  )}
+                  {receiptGuess?.categoryId && (
+                    <div className="p-3 rounded-lg border border-border bg-card">
+                      <span className="text-xs text-muted-foreground">Category (auto)</span>
+                      <p className="text-sm mt-0.5">{categoryName(receiptGuess.categoryId)}</p>
                     </div>
                   )}
                   {ocrResult.date && (
