@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import { compareRecentFirst } from '../utils/sortTx'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { v4 as uuid } from 'uuid'
 import { useCurrentUser, useTransactions, useAccounts, useCategories, useAccountsWithDeleted, useCategoriesWithDeleted, useDefaultAccount, useAccountBalances } from '../db/hooks'
@@ -233,9 +234,10 @@ export function TransactionsPage() {
       }
 
       result.sort((a, b) => {
+        // Penentu kedua/ketiga (waktu pencatatan, id) supaya tanggal yang sama tidak acak.
         const cmp = sortBy === 'date'
-          ? a.date.localeCompare(b.date)
-          : a.amount - b.amount
+          ? -compareRecentFirst(a, b)
+          : (a.amount - b.amount) || -compareRecentFirst(a, b)
         return sortDir === 'asc' ? cmp : -cmp
       })
 

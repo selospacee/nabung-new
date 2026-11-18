@@ -97,6 +97,8 @@ export function AddTransactionModal({
   const [ocrResult, setOcrResult] = useState<any>(null)
   const [receiptImage, setReceiptImage] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [captureError, setCaptureError] = useState<string | null>(null)
+  const [prefillNotice, setPrefillNotice] = useState<string | null>(null)
 
   // Voice
   const voiceCtx = useSpeechToText(categories || [])
@@ -105,6 +107,7 @@ export function AddTransactionModal({
   // Manual form. Accounts load asynchronously, so the default account is applied as soon as it exists.
   const defaultAccountId = defaultAccount?.id || accounts?.[0]?.id || ''
   const accountIdsKey = (accounts || []).map(a => a.id).join(',')
+  const saveAccountId = defaultAccountId
   const [form, setForm] = useState<FormState>(() => emptyForm(defaultAccountId))
 
   useEffect(() => {
@@ -124,6 +127,8 @@ export function AddTransactionModal({
       setForm(emptyForm(defaultAccountId))
       setReceiptImage(null)
       setOcrResult(null)
+      setCaptureError(null)
+      setPrefillNotice(null)
       setActiveTab('camera')
     }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -179,8 +184,16 @@ export function AddTransactionModal({
 
   const processReceipt = async (img: string) => {
     setReceiptImage(img)
-    const result = await ocrCtx.recognizeReceipt(img)
-    setOcrResult(result)
+    setCaptureError(null)
+    try {
+      const result = await ocrCtx.recognizeReceipt(img)
+      setOcrResult(result)
+    } catch (err) {
+      console.error('[Receipt] OCR failed:', err)
+      setCaptureError('Teks struk tidak bisa dibaca otomatis. Foto tetap dilampirkan; isi jumlahnya lewat "Edit in Form".')
+      // Tetap buka hasilnya (kosong) supaya foto bisa dipakai dan form diisi manual.
+      setOcrResult({ text: '', confidence: 0, total: null, date: null, suggestedType: 'expense', suggestedCategoryId: null, rawLines: [] })
+    }
     setShowReceiptDialog(true)
   }
 
@@ -223,6 +236,11 @@ export function AddTransactionModal({
       latitude: null,
       longitude: null,
     }))
+    setPrefillNotice(
+      ocrResult.total
+        ? 'Terisi dari struk. Periksa jumlah, kategori, dan akun sebelum menyimpan.'
+        : 'Jumlah tidak terbaca dari struk. Isi jumlah secara manual; foto struk tetap dilampirkan.'
+    )
     setShowReceiptDialog(false)
     setActiveTab('manual')
   }
@@ -235,13 +253,18 @@ export function AddTransactionModal({
       amount: p.amount ? String(p.amount / 100) : '',
       date: p.date || toISODate(new Date()),
       categoryId: pickCategoryId(categories, p.suggestedType || 'expense', p.suggestedCategoryId),
-      description: p.description || '',
+      description: p.description || voiceCtx.transcript || '',
       receiptImage: null,
       receiptOcrText: null,
       location: p.location || '',
       latitude: p.latitude ?? null,
       longitude: p.longitude ?? null,
     }))
+    setPrefillNotice(
+      p.amount
+        ? 'Terisi dari suara. Periksa jumlah, kategori, dan akun sebelum menyimpan.'
+        : 'Jumlah tidak terdengar jelas (coba ucapkan angka, mis. "50 ribu"). Isi jumlah secara manual.'
+    )
     stopVoice()
     setActiveTab('manual')
   }
@@ -274,13 +297,15 @@ export function AddTransactionModal({
 
   const receiptAction = useAsyncAction()
   const saveReceipt = () => receiptAction.run(async () => {
-    if (!ocrResult?.total || !ocrResult?.date) return
+    if (!ocrResult?.total) { alert('Jumlah tidak terbaca. Gunakan "Edit in Form" untuk mengisinya.'); return }
+    if (!saveAccountId) { alert('Belum ada akun. Buat akun dulu di menu Budgets & Categories / Accounts.'); return }
+    try {
     await addTransaction({
       type: ocrResult.suggestedType || 'expense',
       amount: ocrResult.total,
-      date: ocrResult.date,
+      date: ocrResult.date || toISODate(new Date()),
       categoryId: pickCategoryId(categories, ocrResult.suggestedType || 'expense', ocrResult.suggestedCategoryId) || null,
-      accountId: defaultAccountId,
+      accountId: saveAccountId,
       description: '',
       notes: '',
       receiptImage,
@@ -294,18 +319,24 @@ export function AddTransactionModal({
     setReceiptImage(null)
     setOcrResult(null)
     onTransactionAdded()
+    } catch (err) {
+      console.error('[Receipt] Save failed:', err)
+      alert(`Gagal menyimpan transaksi: ${err instanceof Error ? err.message : String(err)}`)
+    }
   })
 
   const voiceAction = useAsyncAction()
   const saveVoice = () => voiceAction.run(async () => {
     const p = voiceCtx.parsed
-    if (!p.amount || !p.date) return
+    if (!p.amount) { alert('Jumlah tidak terdengar. Gunakan "Edit in Form" untuk mengisinya.'); return }
+    if (!saveAccountId) { alert('Belum ada akun. Buat akun dulu di menu Accounts.'); return }
+    try {
     await addTransaction({
       type: p.suggestedType || 'expense',
       amount: p.amount,
-      date: p.date,
+      date: p.date || toISODate(new Date()),
       categoryId: pickCategoryId(categories, p.suggestedType || 'expense', p.suggestedCategoryId) || null,
-      accountId: defaultAccountId,
+      accountId: saveAccountId,
       description: p.description || '',
       notes: '',
       receiptImage: null,
@@ -317,12 +348,17 @@ export function AddTransactionModal({
     await pushAndReport(userId)
     voiceCtx.clearTranscript()
     onTransactionAdded()
+    } catch (err) {
+      console.error('[Voice] Save failed:', err)
+      alert(`Gagal menyimpan transaksi: ${err instanceof Error ? err.message : String(err)}`)
+    }
   })
 
   const manualAction = useAsyncAction()
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     void manualAction.run(async () => {
+      try {
       const amountCents = displayToCents(form.amount, currency)
       if (!amountCents || amountCents <= 0) { alert('Amount is required'); return }
       if (!form.categoryId) { alert('Category is required'); return }
@@ -343,7 +379,12 @@ export function AddTransactionModal({
       })
       await pushAndReport(userId) // local row is saved either way; pushAndReport tells the user if the server push failed
       setForm(emptyForm(defaultAccountId))
+      setPrefillNotice(null)
       onTransactionAdded()
+      } catch (err) {
+        console.error('[Manual] Save failed:', err)
+        alert(`Gagal menyimpan transaksi: ${err instanceof Error ? err.message : String(err)}`)
+      }
     })
   }
 
@@ -545,13 +586,13 @@ export function AddTransactionModal({
 
                 {voiceCtx.error && <Alert variant="destructive">{voiceCtx.error}</Alert>}
 
-                {voiceCtx.parsed.amount && (
+                {voiceCtx.transcript && (
                   <div className="space-y-3 p-4 rounded-lg border border-border bg-card">
                     <h4 className="text-sm font-medium text-muted-foreground">Parsed Transaction</h4>
                     <div className="grid gap-2 text-sm">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Amount:</span>
-                        <span className="font-mono text-income font-medium">{formatCurrency(voiceCtx.parsed.amount, currency)}</span>
+                        <span className="font-mono text-income font-medium">{voiceCtx.parsed.amount ? formatCurrency(voiceCtx.parsed.amount, currency) : 'Tidak terdengar'}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Date:</span>
@@ -571,13 +612,13 @@ export function AddTransactionModal({
                   </Button>
                   <Button
                     size="sm"
-                    disabled={!voiceCtx.parsed.amount || !voiceCtx.parsed.date}
+                    disabled={!voiceCtx.parsed.amount}
                     loading={voiceAction.pending}
                     onClick={saveVoice}
                   >
                     {voiceAction.pending ? 'Saving...' : 'Save Transaction'}
                   </Button>
-                  <Button variant="outline" size="sm" onClick={fillFormFromVoice} disabled={!voiceCtx.parsed.amount}>
+                  <Button variant="outline" size="sm" onClick={fillFormFromVoice} disabled={!voiceCtx.transcript}>
                     <Pencil className="w-4 h-4 mr-1" /> Edit in Form
                   </Button>
                   {voiceCtx.parsed.amount && (
@@ -591,6 +632,7 @@ export function AddTransactionModal({
           {/* Manual tab */}
           <TabsContent value="manual" className="mt-4">
             <form onSubmit={handleFormSubmit} className="space-y-4">
+              {prefillNotice && <Alert variant="default">{prefillNotice}</Alert>}
               <div>
                 <label className="text-sm font-medium text-foreground mb-2 block">Type</label>
                 <div className="flex gap-2">
@@ -695,6 +737,12 @@ export function AddTransactionModal({
               <div className="mb-4">
                 <img src={receiptImage} alt="Receipt" className="h-48 w-auto rounded-lg object-cover border border-border max-w-full" />
               </div>
+            )}
+
+            {captureError && <Alert variant="warning" className="mb-3">{captureError}</Alert>}
+
+            {ocrResult && !ocrResult.total && !captureError && (
+              <Alert variant="warning" className="mb-3">Jumlah total tidak ditemukan di struk. Gunakan "Edit in Form" untuk mengisinya.</Alert>
             )}
 
             {ocrResult && (
