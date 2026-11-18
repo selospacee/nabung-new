@@ -10,6 +10,10 @@ import { useCameraStream } from '../hooks/useCameraStream'
 import { useAsyncAction } from '../hooks/useAsyncAction'
 import type { Transaction as TxType } from '../types'
 import { db } from '../db'
+import {
+  getAutoLocationPref, setAutoLocationPref, getDevicePosition, resolveAutoLocation,
+  extractPlaceFromReceipt, extractPlaceFromSpeech, type GeoResult, type LatLng,
+} from '../lib/geocode'
 import { CategoryQuickAddDialog } from './CategoryQuickAddDialog'
 import { pushAndReport } from '../db/pushAndReport'
 import { pickCategoryId } from '../utils/pickCategory'
@@ -100,6 +104,21 @@ export function AddTransactionModal({
   const [ocrResult, setOcrResult] = useState<any>(null)
   const [receiptImage, setReceiptImage] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Lokasi otomatis (opt-in, per perangkat): foto -> nama toko/alamat struk, suara -> "di <tempat>",
+  // cadangan: posisi perangkat. Hasil boleh diedit di form sebelum disimpan.
+  const [autoLoc, setAutoLoc] = useState<boolean>(getAutoLocationPref)
+  const [receiptLoc, setReceiptLoc] = useState<GeoResult | null>(null)
+  const [voiceLoc, setVoiceLoc] = useState<GeoResult | null>(null)
+  const [locPending, setLocPending] = useState(false)
+  const receiptLocRef = useRef<Promise<GeoResult | null> | null>(null)
+  const voiceLocRef = useRef<Promise<GeoResult | null> | null>(null)
+  const lastVoiceTextRef = useRef('')
+  const toggleAutoLoc = (on: boolean) => {
+    setAutoLoc(on)
+    setAutoLocationPref(on)
+    if (on) void getDevicePosition() // memunculkan izin lokasi sekarang, bukan saat menyimpan
+  }
   const [showNewCategory, setShowNewCategory] = useState(false)
   const [captureError, setCaptureError] = useState<string | null>(null)
   const [prefillNotice, setPrefillNotice] = useState<string | null>(null)
@@ -122,6 +141,20 @@ export function AddTransactionModal({
     const categoryId = suggestCategory(text, type, categories || [], transactions || []) ?? voiceCtx.parsed.suggestedCategoryId ?? null
     return { type, categoryId: pickCategoryId(categories, type, categoryId) }
   }, [voiceCtx.transcript, voiceCtx.parsed.suggestedCategoryId, categories, transactions])
+
+  // Setelah ucapan selesai (bukan saat masih mendengarkan), cari lokasinya sekali per ucapan.
+  useEffect(() => {
+    const text = voiceCtx.transcript
+    if (!text) { lastVoiceTextRef.current = ''; voiceLocRef.current = null; setVoiceLoc(null); return }
+    if (!autoLoc || voiceCtx.isListening || lastVoiceTextRef.current === text) return
+    lastVoiceTextRef.current = text
+    setLocPending(true)
+    const p = getDevicePosition()
+      .then(device => resolveAutoLocation(extractPlaceFromSpeech(text), device))
+      .catch(() => null)
+    voiceLocRef.current = p
+    void p.then(setVoiceLoc).finally(() => setLocPending(false))
+  }, [voiceCtx.transcript, voiceCtx.isListening, autoLoc])
 
   const categoryName = (id: string | null | undefined) => (categories || []).find(c => c.id === id)?.name || '—'
 
@@ -150,6 +183,11 @@ export function AddTransactionModal({
       setOcrResult(null)
       setCaptureError(null)
       setPrefillNotice(null)
+      setReceiptLoc(null)
+      setVoiceLoc(null)
+      receiptLocRef.current = null
+      voiceLocRef.current = null
+      lastVoiceTextRef.current = ''
       setActiveTab('camera')
     }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -206,10 +244,24 @@ export function AddTransactionModal({
   const processReceipt = async (img: string) => {
     setReceiptImage(img)
     setCaptureError(null)
+    setReceiptLoc(null)
+    receiptLocRef.current = null
+    const devicePromise: Promise<LatLng | null> = autoLoc ? getDevicePosition() : Promise.resolve(null)
+    const startLocation = (placeText: string | null) => {
+      if (!autoLoc) return
+      setLocPending(true)
+      const p = devicePromise
+        .then(device => resolveAutoLocation(placeText, device))
+        .catch(() => null)
+      receiptLocRef.current = p
+      void p.then(setReceiptLoc).finally(() => setLocPending(false))
+    }
     try {
       const result = await ocrCtx.recognizeReceipt(img)
       setOcrResult(result)
+      startLocation(extractPlaceFromReceipt(result.rawLines || []))
     } catch (err) {
+      startLocation(null)
       console.error('[Receipt] OCR failed:', err)
       setCaptureError('Teks struk tidak bisa dibaca otomatis. Foto tetap dilampirkan; isi jumlahnya lewat "Edit in Form".')
       // Tetap buka hasilnya (kosong) supaya foto bisa dipakai dan form diisi manual.
@@ -242,8 +294,9 @@ export function AddTransactionModal({
   }
 
   // ---------- Edit buttons: override the manual form with scanned / spoken data ----------
-  const fillFormFromReceipt = () => {
+  const fillFormFromReceipt = async () => {
     if (!ocrResult) return
+    const loc = receiptLocRef.current ? await receiptLocRef.current : null
     setForm(f => ({
       ...f,
       type: receiptGuess?.type || 'expense',
@@ -253,9 +306,9 @@ export function AddTransactionModal({
       description: '',
       receiptImage,
       receiptOcrText: ocrResult.text ?? null,
-      location: '',
-      latitude: null,
-      longitude: null,
+      location: loc?.location ?? '',
+      latitude: loc?.latitude ?? null,
+      longitude: loc?.longitude ?? null,
     }))
     setPrefillNotice(
       ocrResult.total
@@ -266,8 +319,9 @@ export function AddTransactionModal({
     setActiveTab('manual')
   }
 
-  const fillFormFromVoice = () => {
+  const fillFormFromVoice = async () => {
     const p = voiceCtx.parsed
+    const loc = voiceLocRef.current ? await voiceLocRef.current : null
     setForm(f => ({
       ...f,
       type: voiceGuess.type,
@@ -277,9 +331,9 @@ export function AddTransactionModal({
       description: p.description || voiceCtx.transcript || '',
       receiptImage: null,
       receiptOcrText: null,
-      location: p.location || '',
-      latitude: p.latitude ?? null,
-      longitude: p.longitude ?? null,
+      location: p.location || loc?.location || '',
+      latitude: p.latitude ?? loc?.latitude ?? null,
+      longitude: p.longitude ?? loc?.longitude ?? null,
     }))
     setPrefillNotice(
       p.amount
@@ -321,6 +375,7 @@ export function AddTransactionModal({
     if (!ocrResult?.total) { alert('Jumlah tidak terbaca. Gunakan "Edit in Form" untuk mengisinya.'); return }
     if (!saveAccountId) { alert('Belum ada akun. Buat akun dulu di menu Budgets & Categories / Accounts.'); return }
     try {
+    const loc = receiptLocRef.current ? await receiptLocRef.current : null
     await addTransaction({
       type: receiptGuess?.type || 'expense',
       amount: ocrResult.total,
@@ -331,9 +386,9 @@ export function AddTransactionModal({
       notes: '',
       receiptImage,
       receiptOcrText: ocrResult.text ?? null,
-      location: '',
-      latitude: null,
-      longitude: null,
+      location: loc?.location ?? '',
+      latitude: loc?.latitude ?? null,
+      longitude: loc?.longitude ?? null,
     })
     await pushAndReport(userId)
     setShowReceiptDialog(false)
@@ -352,6 +407,7 @@ export function AddTransactionModal({
     if (!p.amount) { alert('Jumlah tidak terdengar. Gunakan "Edit in Form" untuk mengisinya.'); return }
     if (!saveAccountId) { alert('Belum ada akun. Buat akun dulu di menu Accounts.'); return }
     try {
+    const loc = voiceLocRef.current ? await voiceLocRef.current : null
     await addTransaction({
       type: voiceGuess.type,
       amount: p.amount,
@@ -362,9 +418,9 @@ export function AddTransactionModal({
       notes: '',
       receiptImage: null,
       receiptOcrText: null,
-      location: p.location || '',
-      latitude: p.latitude ?? null,
-      longitude: p.longitude ?? null,
+      location: p.location || loc?.location || '',
+      latitude: p.latitude ?? loc?.latitude ?? null,
+      longitude: p.longitude ?? loc?.longitude ?? null,
     })
     await pushAndReport(userId)
     voiceCtx.clearTranscript()
@@ -459,6 +515,24 @@ export function AddTransactionModal({
 
   const hasStream = cam.active
 
+  const autoLocToggle = (
+    <label className="flex items-start gap-2 text-sm cursor-pointer">
+      <input
+        type="checkbox"
+        className="mt-0.5"
+        checked={autoLoc}
+        onChange={e => toggleAutoLoc(e.target.checked)}
+      />
+      <span>
+        Isi lokasi otomatis
+        <span className="block text-xs text-muted-foreground">
+          Memakai lokasi perangkat dan nama tempat dari struk/ucapan. Teks tempat dikirim ke layanan peta
+          (OpenStreetMap/Google). Hasilnya bisa diubah di form.
+        </span>
+      </span>
+    </label>
+  )
+
   return (
     <Dialog open={open} onClose={onClose} className="max-w-2xl">
       <div className="p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
@@ -534,6 +608,8 @@ export function AddTransactionModal({
                 </div>
               )}
             </div>
+            {autoLocToggle}
+
             {cam.error && <Alert variant="destructive">{cam.error}</Alert>}
 
             <div
@@ -597,6 +673,8 @@ export function AddTransactionModal({
                   </div>
                 )}
 
+                {autoLocToggle}
+
                 <div className="flex items-center gap-2">
                   <label className="text-sm text-muted-foreground">Language:</label>
                   <Select value={voiceCtx.selectedLang} onChange={e => voiceCtx.setSelectedLang(e.target.value as 'id-ID' | 'en-US')}>
@@ -619,6 +697,14 @@ export function AddTransactionModal({
                         <span className="text-muted-foreground">Date:</span>
                         <span className="font-mono">{voiceCtx.parsed.date}</span>
                       </div>
+                      {autoLoc && (
+                        <div className="flex justify-between gap-3">
+                          <span className="text-muted-foreground shrink-0">Location:</span>
+                          <span className="text-right truncate">
+                            {voiceLoc ? voiceLoc.location : locPending ? 'Mencari…' : '—'}
+                          </span>
+                        </div>
+                      )}
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Category:</span>
                         <span>{categoryName(voiceGuess.categoryId)} <span className="text-xs text-muted-foreground">({voiceGuess.type})</span></span>
@@ -799,6 +885,14 @@ export function AddTransactionModal({
                     <div className="p-3 rounded-lg border border-border bg-card">
                       <span className="text-xs text-muted-foreground">Total</span>
                       <p className="font-mono font-semibold text-income text-sm mt-0.5">{formatCurrency(ocrResult.total, currency)}</p>
+                    </div>
+                  )}
+                  {autoLoc && (
+                    <div className="p-3 rounded-lg border border-border bg-card col-span-2">
+                      <span className="text-xs text-muted-foreground">
+                        Lokasi (auto{receiptLoc ? `, ${receiptLoc.source === 'device' ? 'dari perangkat' : 'dari nama tempat'}` : ''})
+                      </span>
+                      <p className="text-sm mt-0.5 break-words">{receiptLoc ? receiptLoc.location : locPending ? 'Mencari…' : 'Tidak ditemukan'}</p>
                     </div>
                   )}
                   {receiptGuess?.categoryId && (
