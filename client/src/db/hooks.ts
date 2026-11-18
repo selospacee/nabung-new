@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { compareRecentFirst } from '../utils/sortTx'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db'
 import type { Transaction } from '../types'
@@ -166,7 +167,7 @@ export function useTransactions(userId?: string | null, filters?: {
         )
     }
 
-    return filtered.sort((a, b) => b.date.localeCompare(a.date))
+    return filtered.sort(compareRecentFirst)
   }, [userId, filters?.startDate, filters?.endDate, filters?.categoryIds?.join(','), filters?.accountIds?.join(','), filters?.type, filters?.search])
 }
 

@@ -89,9 +89,22 @@ export function useSpeechToText(categories: Category[]) {
     let remaining = text.trim()
 
     // Extract amount — use parseIDRAmount for Rp prefix + multi-group thousands
-    let amount: number | null = parseIDRAmount(text)
-    if (amount !== null) {
-      remaining = remaining.replace(/(?:Rp|[$€£])\s*[\d.,]+|[\d.,]+/g, '').trim()
+    // Pengucapan umum: "50 ribu", "50rb", "50k", "2 juta", "1,5 jt" (digit + pengali).
+    let amount: number | null = null
+    const scaled = text.match(/(\d+(?:[.,]\d+)?)\s*(ribu|rb|k|juta|jt)\b/i)
+    if (scaled) {
+      const n = parseFloat(scaled[1].replace(',', '.'))
+      const mult = /^(juta|jt)$/i.test(scaled[2]) ? 1_000_000 : 1_000
+      if (!isNaN(n)) {
+        amount = Math.round(n * mult * 100)
+        remaining = remaining.replace(scaled[0], '').trim()
+      }
+    }
+    if (amount === null) {
+      amount = parseIDRAmount(text)
+      if (amount !== null) {
+        remaining = remaining.replace(/(?:Rp|[$€£])\s*[\d.,]+|[\d.,]+/g, '').trim()
+      }
     }
 
     // Extract date
@@ -227,17 +240,17 @@ export function useSpeechToText(categories: Category[]) {
     transcriptRef.current = ''
 
     recognition.onresult = (event: any) => {
-      let final = ''
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i]
-        if (result.isFinal) {
-          final += result[0].transcript
-        }
+      // Gabungkan SEMUA hasil (final dan sementara) dari awal sesi. Sebelumnya hanya segmen final
+      // terakhir yang disimpan, sehingga ucapan yang dihentikan sebelum final menghasilkan form kosong.
+      let text = ''
+      for (let i = 0; i < event.results.length; i++) {
+        text += event.results[i][0].transcript
       }
-      if (final) {
-        transcriptRef.current = final
-        setTranscript(final)
-        setParsed(parseTranscript(final))
+      text = text.trim()
+      if (text) {
+        transcriptRef.current = text
+        setTranscript(text)
+        setParsed(parseTranscript(text))
       }
     }
 
