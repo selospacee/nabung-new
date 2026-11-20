@@ -37,6 +37,8 @@
 }
 
 html.light {
+  --color-income: #047857;
+  --color-expense: #DC2626;
   --color-background: #E8EEFC;
   --color-foreground: #172033;
   --color-card: rgb(255 255 255 / 0.55);
