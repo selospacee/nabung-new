@@ -19,7 +19,7 @@ function AppRoutes() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="animate-pulse flex flex-col items-center gap-3">
           <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center">
             <span className="text-white font-bold text-2xl">N</span>

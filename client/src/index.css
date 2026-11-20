@@ -3,18 +3,19 @@
 @theme {
   --color-income: #10B981;
   --color-expense: #EF4444;
-  --color-background: #0F1117;
-  --color-foreground: #E5E7EB;
-  --color-card: #1A1D27;
-  --color-card-foreground: #E5E7EB;
-  --color-border: #2D3140;
-  --color-input: #2D3140;
-  --color-primary: #6366F1;
+  --color-background: #0A0F1F;
+  --color-foreground: #EEF1F8;
+  --color-card: rgb(255 255 255 / 0.07);
+  --color-card-foreground: #EEF1F8;
+  --color-border: rgb(255 255 255 / 0.14);
+  --color-input: rgb(255 255 255 / 0.18);
+  --color-field: rgb(255 255 255 / 0.06);
+  --color-primary: #6B70F5;
   --color-primary-foreground: #FFFFFF;
-  --color-secondary: #2D3140;
-  --color-secondary-foreground: #E5E7EB;
-  --color-muted: #4B5065;
-  --color-muted-foreground: #8B94A7;
+  --color-secondary: rgb(255 255 255 / 0.10);
+  --color-secondary-foreground: #EEF1F8;
+  --color-muted: rgb(255 255 255 / 0.20);
+  --color-muted-foreground: #AAB4CB;
   --color-accent: #6366F1;
   --color-accent-foreground: #FFFFFF;
   --color-destructive: #EF4444;
@@ -29,25 +30,26 @@
   --color-chart-4: #EC4899;
   --color-chart-5: #06B6D4;
   --color-chart-6: #8B5CF6;
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
 }
 
 html.light {
-  --color-background: #F8FAFC;
-  --color-foreground: #1E293B;
-  --color-card: #FFFFFF;
-  --color-card-foreground: #1E293B;
-  --color-border: #E2E8F0;
-  --color-input: #F1F5F9;
+  --color-background: #E8EEFC;
+  --color-foreground: #172033;
+  --color-card: rgb(255 255 255 / 0.55);
+  --color-card-foreground: #172033;
+  --color-border: rgb(255 255 255 / 0.75);
+  --color-input: rgb(23 32 51 / 0.18);
+  --color-field: rgb(255 255 255 / 0.55);
   --color-primary: #4F46E5;
   --color-primary-foreground: #FFFFFF;
-  --color-secondary: #F1F5F9;
-  --color-secondary-foreground: #1E293B;
-  --color-muted: #CBD5E1;
-  --color-muted-foreground: #64748B;
+  --color-secondary: rgb(23 32 51 / 0.07);
+  --color-secondary-foreground: #172033;
+  --color-muted: rgb(23 32 51 / 0.16);
+  --color-muted-foreground: #53607A;
   --color-accent: #4F46E5;
   --color-accent-foreground: #FFFFFF;
   --color-destructive: #DC2626;
@@ -68,6 +70,90 @@ body {
   font-family: Inter, system-ui, -apple-system, sans-serif;
   margin: 0;
 }
+
+/*
+ * Glassmorphism. Tiga lapis kaca di atas latar aurora:
+ *   .glass         panel konten (kartu, daftar)        blur sedang
+ *   .glass-strong  permukaan yang melayang (dialog, navigasi)  blur kuat + bayangan dalam
+ *   .glass-inset   cekungan (daftar tab, kolom isian)  tanpa blur, lebih gelap
+ * Aurora memakai tiga warna aplikasi: indigo (aksi), hijau (pemasukan), emas (tabungan).
+ */
+:root {
+  --aurora:
+    radial-gradient(60rem 42rem at 8% -8%, rgb(99 102 241 / 0.50), transparent 62%),
+    radial-gradient(50rem 38rem at 104% 12%, rgb(16 185 129 / 0.30), transparent 62%),
+    radial-gradient(48rem 40rem at 48% 112%, rgb(245 158 11 / 0.24), transparent 62%);
+  --glass-bg: rgb(255 255 255 / 0.07);
+  --glass-bg-strong: rgb(255 255 255 / 0.11);
+  --glass-inset-bg: rgb(0 0 0 / 0.22);
+  --glass-border: rgb(255 255 255 / 0.15);
+  --glass-highlight: rgb(255 255 255 / 0.22);
+  --glass-shadow: 0 8px 32px -8px rgb(0 0 0 / 0.55);
+  --glass-active-bg: rgb(255 255 255 / 0.18);
+  --glass-blur: 18px;
+  --glass-blur-strong: 28px;
+}
+
+html.light {
+  --aurora:
+    radial-gradient(60rem 42rem at 8% -8%, rgb(129 140 248 / 0.55), transparent 62%),
+    radial-gradient(50rem 38rem at 104% 12%, rgb(52 211 153 / 0.40), transparent 62%),
+    radial-gradient(48rem 40rem at 48% 112%, rgb(251 191 36 / 0.38), transparent 62%);
+  --glass-bg: rgb(255 255 255 / 0.55);
+  --glass-bg-strong: rgb(255 255 255 / 0.72);
+  --glass-inset-bg: rgb(23 32 51 / 0.06);
+  --glass-border: rgb(255 255 255 / 0.80);
+  --glass-highlight: rgb(255 255 255 / 0.95);
+  --glass-shadow: 0 8px 32px -10px rgb(23 32 51 / 0.25);
+  --glass-active-bg: rgb(255 255 255 / 0.95);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--aurora);
+  pointer-events: none;
+}
+
+@layer components {
+  .glass,
+  .glass-strong {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    box-shadow: inset 0 1px 0 var(--glass-highlight), var(--glass-shadow);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+    backdrop-filter: blur(var(--glass-blur)) saturate(160%);
+  }
+  .glass-strong {
+    background: var(--glass-bg-strong);
+    -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(180%);
+    backdrop-filter: blur(var(--glass-blur-strong)) saturate(180%);
+  }
+  .glass-inset {
+    background: var(--glass-inset-bg);
+    border: 1px solid var(--glass-border);
+  }
+  .glass-active {
+    background: var(--glass-active-bg);
+    box-shadow: inset 0 1px 0 var(--glass-highlight), 0 2px 10px -2px rgb(0 0 0 / 0.35);
+  }
+}
+
+/* Tanpa dukungan blur, atau pengguna meminta transparansi dikurangi: permukaan solid, tetap terbaca. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root { --glass-bg: #171C30; --glass-bg-strong: #1D2339; }
+  html.light { --glass-bg: #F6F8FF; --glass-bg-strong: #FFFFFF; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root { --glass-bg: #171C30; --glass-bg-strong: #1D2339; --glass-blur: 0px; --glass-blur-strong: 0px; }
+  html.light { --glass-bg: #F6F8FF; --glass-bg-strong: #FFFFFF; }
+}
+
+/* Daftar pilihan bawaan browser tidak transparan: beri latar yang terbaca. */
+select option { background-color: #151A2E; color: #EEF1F8; }
+html.light select option { background-color: #FFFFFF; color: #172033; }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

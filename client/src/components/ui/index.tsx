@@ -22,11 +22,11 @@ export function Button({
   children,
   ...props
 }: ButtonProps) {
-  const base = 'inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50'
+  const base = 'inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50'
   const variants = {
-    default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+    default: 'bg-primary text-primary-foreground shadow-[0_6px_18px_-6px_rgb(107_112_245/0.75)] hover:brightness-110',
     secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-    outline: 'border border-border bg-transparent hover:bg-secondary hover:text-secondary-foreground',
+    outline: 'border border-border bg-field hover:bg-secondary hover:text-secondary-foreground',
     ghost: 'hover:bg-secondary hover:text-secondary-foreground',
     destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
     success: 'bg-success text-success-foreground hover:bg-success/90',
@@ -74,7 +74,7 @@ export function Input({ className, label, error, id, ...props }: InputProps) {
       <input
         id={id}
         className={cn(
-          'flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+          'flex h-10 w-full rounded-lg border border-border bg-field px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary disabled:cursor-not-allowed disabled:opacity-50',
           error && 'border-destructive',
           className
         )}
@@ -103,7 +103,7 @@ export function Select({ className, label, error, id, children, ...props }: Sele
       <select
         id={id}
         className={cn(
-          'flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+          'flex h-10 w-full rounded-lg border border-border bg-field px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary disabled:cursor-not-allowed disabled:opacity-50',
           error && 'border-destructive',
           className
         )}
@@ -133,7 +133,7 @@ export function Textarea({ className, label, error, id, ...props }: TextareaProp
       <textarea
         id={id}
         className={cn(
-          'flex min-h-[80px] w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+          'flex min-h-[80px] w-full rounded-lg border border-border bg-field px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary disabled:cursor-not-allowed disabled:opacity-50',
           error && 'border-destructive',
           className
         )}
@@ -156,7 +156,7 @@ export function Card({ className, children, hover = false, onClick }: CardProps)
   return (
     <div
       className={cn(
-        'rounded-xl border border-border bg-card text-card-foreground shadow-sm',
+        'rounded-xl glass text-card-foreground',
         hover && 'transition-shadow hover:shadow-md cursor-pointer',
         onClick && 'cursor-pointer',
         className
@@ -222,7 +222,7 @@ export function Dialog({ open, onClose, children, className }: DialogProps) {
   return (
     <div className="fixed inset-0 z-50">
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/45 backdrop-blur-sm"
         onClick={onClose}
       />
       <div
@@ -232,7 +232,7 @@ export function Dialog({ open, onClose, children, className }: DialogProps) {
         )}
       >
         <div
-          className="w-full max-w-lg rounded-xl border border-border bg-card shadow-xl animate-in fade-in-0 zoom-in-95"
+          className="w-full max-w-lg rounded-2xl glass-strong animate-in fade-in-0 zoom-in-95"
           onClick={e => e.stopPropagation()}
         >
           {children}
@@ -367,7 +367,7 @@ export function Tabs({ defaultValue, value: controlledValue, onValueChange, chil
 }
 
 export function TabsList({ children, className }: TabsListProps) {
-  return <div className={cn('flex gap-1 border-b border-border', className)}>{children}</div>
+  return <div className={cn('glass-inset flex w-fit max-w-full gap-1 overflow-x-auto rounded-xl p-1', className)}>{children}</div>
 }
 
 export function TabsTrigger({ value, children, className }: TabsTriggerProps) {
@@ -379,10 +379,10 @@ export function TabsTrigger({ value, children, className }: TabsTriggerProps) {
     <button
       onClick={() => setValue(value)}
       className={cn(
-        'flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-0 transition-colors',
+        'flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-1.5 text-sm font-medium transition-colors',
         activeValue === value
-          ? 'border-primary text-primary'
-          : 'border-transparent text-muted-foreground hover:text-foreground',
+          ? 'glass-active text-foreground'
+          : 'text-muted-foreground hover:text-foreground',
         className
       )}
     >

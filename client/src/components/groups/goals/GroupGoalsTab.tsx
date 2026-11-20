@@ -43,7 +43,7 @@ export function GroupGoalsTab({ groupId }: GroupGoalsTabProps) {
         {groupData && isActiveMember && (
           <button
             type="button"
-            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white"
+            className="rounded-lg bg-success px-4 py-2 text-sm text-white"
             onClick={() => setDialog({ mode: 'create' })}
           >
             Tambah goal
@@ -54,15 +54,15 @@ export function GroupGoalsTab({ groupId }: GroupGoalsTabProps) {
       <ErrorNotice error={loadError} />
 
       {!group.loading && groupData === null && (
-        <p className="text-sm text-slate-500">Grup tidak ditemukan atau tidak bisa dilihat.</p>
+        <p className="text-sm text-muted-foreground">Grup tidak ditemukan atau tidak bisa dilihat.</p>
       )}
 
       {!groupData ? (
-        group.loading ? <p className="text-sm text-slate-500">Memuat goal…</p> : null
+        group.loading ? <p className="text-sm text-muted-foreground">Memuat goal…</p> : null
       ) : goals.loading ? (
-        <p className="text-sm text-slate-500">Memuat goal…</p>
+        <p className="text-sm text-muted-foreground">Memuat goal…</p>
       ) : items.length === 0 ? (
-        <p className="text-sm text-slate-500">Belum ada goal. Buat goal pertama untuk grup ini.</p>
+        <p className="text-sm text-muted-foreground">Belum ada goal. Buat goal pertama untuk grup ini.</p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {items.map(({ goal, progress }) => (

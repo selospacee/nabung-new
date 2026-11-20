@@ -568,7 +568,7 @@ export function TransactionsPage() {
               placeholder="Search transactions..."
               value={filters.search}
               onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
-              className="w-full h-10 pl-9 pr-4 rounded-lg border border-input bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+              className="w-full h-10 pl-9 pr-4 rounded-lg border border-border bg-field text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/60 focus:border-primary"
             />
           </div>
         </div>

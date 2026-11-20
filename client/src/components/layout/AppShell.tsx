@@ -76,7 +76,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen flex">
       {/* Sidebar */}
-            <aside className="hidden lg:flex flex-col w-64 border-r border-border bg-card min-h-screen sticky top-0">
+            <aside className="hidden lg:flex flex-col w-64 shrink-0 glass-strong rounded-2xl m-3 h-[calc(100vh-1.5rem)] sticky top-3">
         <div className="flex items-center gap-2 px-6 py-5 border-b border-border">
           <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
             <span className="text-white font-bold text-lg">N</span>
@@ -102,7 +102,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
                   isActive
-                    ? 'bg-primary/10 text-primary'
+                    ? 'glass-active text-foreground'
                     : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                 )}
               >
@@ -122,7 +122,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </aside>
 
       {/* Mobile bottom navigation: slots (Dashboard, Budgets, +, Bareng, Settings) */}
-            <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden border-t border-border bg-card/95 backdrop-blur-sm">
+            <nav className="fixed bottom-2 left-2 right-2 z-50 lg:hidden rounded-2xl glass-strong">
               <div className="flex items-center justify-between px-2 py-1.5 w-full">
                 <div className="flex items-center justify-around w-full">
                   {/* Dashboard - slot 1 */}
@@ -197,7 +197,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             {/* Remove floating FAB - now integrated in bottom nav */}
 
                               {/* Main content */}
-            <main className="flex-1 p-4 lg:p-6 max-w-7xl w-full pb-20 lg:pb-0">
+            <main className="flex-1 p-4 lg:p-6 max-w-7xl w-full pb-24 lg:pb-0">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold text-foreground">
             {NAV_ITEMS.find(item => {

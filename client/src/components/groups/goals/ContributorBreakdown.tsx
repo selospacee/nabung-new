@@ -16,7 +16,7 @@ export function ContributorBreakdown({ contributions, members, currency }: Contr
   const { total, shares } = buildContributorBreakdown(contributions, members)
 
   if (shares.length === 0) {
-    return <p className="text-sm text-slate-500">Belum ada setoran untuk dihitung.</p>
+    return <p className="text-sm text-muted-foreground">Belum ada setoran untuk dihitung.</p>
   }
 
   return (
@@ -30,18 +30,18 @@ export function ContributorBreakdown({ contributions, members, currency }: Contr
             <div className="flex items-baseline justify-between gap-2">
               <span className="min-w-0 truncate">
                 {s.name}
-                {s.hasLeft && <span className="ml-1 text-xs text-slate-500">(sudah keluar)</span>}
+                {s.hasLeft && <span className="ml-1 text-xs text-muted-foreground">(sudah keluar)</span>}
               </span>
-              <span className="shrink-0 tabular-nums text-slate-600">
+              <span className="shrink-0 tabular-nums text-muted-foreground">
                 {centsToDisplay(s.amount, currency)} · {formatPercent(s.percent)}
               </span>
             </div>
             <div
-              className="mt-1 h-2 w-full overflow-hidden rounded-full bg-slate-100"
+              className="mt-1 h-2 w-full overflow-hidden rounded-full bg-secondary"
               role="img"
               aria-label={`${s.name}: ${formatPercent(s.percent)} dari total`}
             >
-              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${barWidthPercent(s.percent)}%` }} />
+              <div className="h-full rounded-full bg-success" style={{ width: `${barWidthPercent(s.percent)}%` }} />
             </div>
           </li>
         ))}

@@ -58,7 +58,7 @@ export function DialogShell({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-xl"
+        className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl glass-strong p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id={titleId} className="mb-4 text-lg font-semibold">
@@ -74,7 +74,7 @@ export function DialogShell({
 export function ErrorNotice({ error }: { error: SharedSavingsError | null }) {
   if (!error) return null
   return (
-    <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+    <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
       {error.message} <span className="font-mono text-xs opacity-70">[{error.code}]</span>
     </p>
   )
@@ -221,25 +221,25 @@ export function GoalFormDialog({
   }
 
   const inputClass =
-    'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-500'
+    'w-full rounded-lg border border-border px-3 py-2 text-sm disabled:bg-secondary disabled:text-muted-foreground'
 
   return (
     <DialogShell title={heading} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
         {readOnly && (
-          <p className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700">
+          <p className="rounded-lg bg-secondary px-3 py-2 text-sm text-foreground">
             {goal?.status === 'cancelled'
               ? 'Goal yang sudah dibatalkan tidak bisa diubah.'
               : 'Hanya pengelola goal yang bisa mengubah goal ini.'}
           </p>
         )}
         {!isEdit && groupType === 'circle' && (
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted-foreground">
             Di grup circle, hanya pembuat goal dan pemilik grup yang bisa mengubah goal ini.
           </p>
         )}
         {!otherMembersExist && (
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted-foreground">
             Grup ini belum punya anggota lain. Undang anggota lewat kode undangan agar bisa ikut menabung.
           </p>
         )}
@@ -256,7 +256,7 @@ export function GoalFormDialog({
             disabled={readOnly || saving}
             onChange={(e) => setTitle(e.target.value)}
           />
-          {fieldErrors.title && <p className="mt-1 text-xs text-red-600">{fieldErrors.title}</p>}
+          {fieldErrors.title && <p className="mt-1 text-xs text-destructive">{fieldErrors.title}</p>}
         </div>
 
         <div>
@@ -272,12 +272,12 @@ export function GoalFormDialog({
             disabled={readOnly || saving}
             onChange={(e) => setTargetAmount(e.target.value)}
           />
-          {fieldErrors.targetAmount && <p className="mt-1 text-xs text-red-600">{fieldErrors.targetAmount}</p>}
+          {fieldErrors.targetAmount && <p className="mt-1 text-xs text-destructive">{fieldErrors.targetAmount}</p>}
         </div>
 
         <div>
           <label htmlFor="goal-deadline" className="mb-1 block text-sm font-medium">
-            Batas waktu <span className="font-normal text-slate-500">(opsional)</span>
+            Batas waktu <span className="font-normal text-muted-foreground">(opsional)</span>
           </label>
           <input
             id="goal-deadline"
@@ -287,13 +287,13 @@ export function GoalFormDialog({
             disabled={readOnly || saving}
             onChange={(e) => setDeadline(e.target.value)}
           />
-          {fieldErrors.deadline && <p className="mt-1 text-xs text-red-600">{fieldErrors.deadline}</p>}
+          {fieldErrors.deadline && <p className="mt-1 text-xs text-destructive">{fieldErrors.deadline}</p>}
         </div>
 
         <fieldset>
           <legend className="mb-1 text-sm font-medium">Peserta</legend>
           {isEdit && participants.loading ? (
-            <p className="text-xs text-slate-500">Memuat peserta…</p>
+            <p className="text-xs text-muted-foreground">Memuat peserta…</p>
           ) : (
             <ul className="space-y-1">
               {members.map((m) => (
@@ -312,13 +312,13 @@ export function GoalFormDialog({
             </ul>
           )}
           {fieldErrors.participantIds && (
-            <p className="mt-1 text-xs text-red-600">{fieldErrors.participantIds}</p>
+            <p className="mt-1 text-xs text-destructive">{fieldErrors.participantIds}</p>
           )}
           {participants.error && <ErrorNotice error={participants.error} />}
         </fieldset>
 
         {partialGoalId && (
-          <p role="alert" className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <p role="alert" className="rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning">
             Goal sudah tersimpan, tetapi peserta belum lengkap. Tutup dialog ini lalu buka &quot;Ubah goal&quot; untuk
             melengkapi peserta.
           </p>
@@ -326,13 +326,13 @@ export function GoalFormDialog({
         <ErrorNotice error={formError} />
 
         {isEdit && goal?.status === 'active' && canManage && (
-          <div className="rounded-lg border border-red-200 p-3">
+          <div className="rounded-lg border border-destructive/30 p-3">
             {confirmCancel ? (
               <div className="flex items-center justify-between gap-2 text-sm">
                 <span>Batalkan goal ini? Setoran tidak bisa ditambah lagi.</span>
                 <button
                   type="button"
-                  className="rounded-lg bg-red-600 px-3 py-1.5 text-white disabled:opacity-50"
+                  className="rounded-lg bg-destructive px-3 py-1.5 text-white disabled:opacity-50"
                   disabled={saving}
                   onClick={handleCancelGoal}
                 >
@@ -342,7 +342,7 @@ export function GoalFormDialog({
             ) : (
               <button
                 type="button"
-                className="text-sm text-red-700 disabled:opacity-50"
+                className="text-sm text-destructive disabled:opacity-50"
                 disabled={saving}
                 onClick={() => setConfirmCancel(true)}
               >
@@ -360,7 +360,7 @@ export function GoalFormDialog({
             <button
               type="submit"
               disabled={saving || partialGoalId !== null}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white disabled:opacity-50"
+              className="rounded-lg bg-success px-4 py-2 text-sm text-white disabled:opacity-50"
             >
               {saving ? 'Menyimpan…' : 'Simpan'}
             </button>
