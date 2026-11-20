@@ -117,7 +117,7 @@ export function ContributionFormDialog({
     }
   }
 
-  const inputClass = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100'
+  const inputClass = 'w-full rounded-lg border border-border px-3 py-2 text-sm disabled:bg-secondary'
 
   return (
     <DialogShell title={isEdit ? 'Ubah setoran' : `Setor ke "${goal.title}"`} onClose={onClose}>
@@ -135,7 +135,7 @@ export function ContributionFormDialog({
             disabled={saving}
             onChange={(e) => setAmount(e.target.value)}
           />
-          {fieldErrors.amount && <p className="mt-1 text-xs text-red-600">{fieldErrors.amount}</p>}
+          {fieldErrors.amount && <p className="mt-1 text-xs text-destructive">{fieldErrors.amount}</p>}
         </div>
 
         <div>
@@ -150,12 +150,12 @@ export function ContributionFormDialog({
             disabled={saving}
             onChange={(e) => setContributedAt(e.target.value)}
           />
-          {fieldErrors.contributedAt && <p className="mt-1 text-xs text-red-600">{fieldErrors.contributedAt}</p>}
+          {fieldErrors.contributedAt && <p className="mt-1 text-xs text-destructive">{fieldErrors.contributedAt}</p>}
         </div>
 
         <div>
           <label htmlFor="contribution-note" className="mb-1 block text-sm font-medium">
-            Catatan <span className="font-normal text-slate-500">(opsional)</span>
+            Catatan <span className="font-normal text-muted-foreground">(opsional)</span>
           </label>
           <input
             id="contribution-note"
@@ -165,19 +165,19 @@ export function ContributionFormDialog({
             disabled={saving}
             onChange={(e) => setNote(e.target.value)}
           />
-          {fieldErrors.note && <p className="mt-1 text-xs text-red-600">{fieldErrors.note}</p>}
+          {fieldErrors.note && <p className="mt-1 text-xs text-destructive">{fieldErrors.note}</p>}
         </div>
 
         <ErrorNotice error={formError} />
 
         {isEdit && (
-          <div className="rounded-lg border border-red-200 p-3">
+          <div className="rounded-lg border border-destructive/30 p-3">
             {confirmDelete ? (
               <div className="flex items-center justify-between gap-2 text-sm">
                 <span>Hapus setoran ini? Tidak bisa dipulihkan.</span>
                 <button
                   type="button"
-                  className="rounded-lg bg-red-600 px-3 py-1.5 text-white disabled:opacity-50"
+                  className="rounded-lg bg-destructive px-3 py-1.5 text-white disabled:opacity-50"
                   disabled={saving}
                   onClick={handleDelete}
                 >
@@ -187,7 +187,7 @@ export function ContributionFormDialog({
             ) : (
               <button
                 type="button"
-                className="text-sm text-red-700 disabled:opacity-50"
+                className="text-sm text-destructive disabled:opacity-50"
                 disabled={saving}
                 onClick={() => setConfirmDelete(true)}
               >
@@ -204,7 +204,7 @@ export function ContributionFormDialog({
           <button
             type="submit"
             disabled={saving}
-            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white disabled:opacity-50"
+            className="rounded-lg bg-success px-4 py-2 text-sm text-white disabled:opacity-50"
           >
             {saving ? 'Menyimpan…' : isEdit ? 'Simpan perubahan' : 'Setor'}
           </button>
