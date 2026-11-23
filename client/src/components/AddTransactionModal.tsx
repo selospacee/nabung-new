@@ -17,6 +17,7 @@ import {
 import { CategoryQuickAddDialog } from './CategoryQuickAddDialog'
 import { pushAndReport } from '../db/pushAndReport'
 import { pickCategoryId } from '../utils/pickCategory'
+import { matchAccountFromText } from '../utils/matchAccount'
 import { guessType, suggestCategory } from '../utils/autoCategory'
 
 type TxTypeName = TxType['type']
@@ -76,6 +77,11 @@ interface AddTransactionModalProps {
   defaultAccount: any
   transactions: any[]
   onTransactionAdded: () => void
+}
+
+const LAST_CAPTURE_ACCOUNT_KEY = 'nabung.lastCaptureAccountId'
+const readLastCaptureAccountId = (): string => {
+  try { return localStorage.getItem(LAST_CAPTURE_ACCOUNT_KEY) || '' } catch { return '' }
 }
 
 export function AddTransactionModal({
@@ -161,7 +167,38 @@ export function AddTransactionModal({
   // Manual form. Accounts load asynchronously, so the default account is applied as soon as it exists.
   const defaultAccountId = defaultAccount?.id || accounts?.[0]?.id || ''
   const accountIdsKey = (accounts || []).map(a => a.id).join(',')
-  const saveAccountId = defaultAccountId
+
+  // Akun untuk Save langsung dari tab Camera/Voice: terakhir dipakai (per perangkat), lalu akun default.
+  const [capturePref, setCapturePref] = useState<string>(readLastCaptureAccountId)
+  const captureAccountId = accountIdsKey.split(',').includes(capturePref) ? capturePref : defaultAccountId
+  const capturePickedRef = useRef(false)
+  const changeCaptureAccount = (id: string) => {
+    capturePickedRef.current = true
+    setCapturePref(id)
+    try { localStorage.setItem(LAST_CAPTURE_ACCOUNT_KEY, id) } catch { /* abaikan */ }
+  }
+  // Ucapan yang menyebut akun ("pakai BCA") memilihnya otomatis, kecuali pengguna sudah memilih sendiri.
+  useEffect(() => {
+    if (voiceCtx.isListening) capturePickedRef.current = false
+  }, [voiceCtx.isListening])
+  useEffect(() => {
+    if (!voiceCtx.transcript) { capturePickedRef.current = false; return }
+    if (capturePickedRef.current) return
+    const id = matchAccountFromText(voiceCtx.transcript, accounts || [])
+    if (id) setCapturePref(id)
+  }, [voiceCtx.transcript, accounts])
+  const captureAccountSelect = (
+    <div className="flex items-center gap-2">
+      <label htmlFor="capture-account" className="text-sm text-muted-foreground shrink-0">Akun:</label>
+      {accountIdsKey ? (
+        <Select id="capture-account" value={captureAccountId} onChange={e => changeCaptureAccount(e.target.value)}>
+          {accounts?.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </Select>
+      ) : (
+        <span className="text-sm text-destructive">Belum ada akun. Buat akun dulu di menu Accounts.</span>
+      )}
+    </div>
+  )
   const [form, setForm] = useState<FormState>(() => emptyForm(defaultAccountId))
 
   useEffect(() => {
@@ -179,6 +216,8 @@ export function AddTransactionModal({
   useEffect(() => {
     if (open) {
       setForm(emptyForm(defaultAccountId))
+      setCapturePref(readLastCaptureAccountId())
+      capturePickedRef.current = false
       setReceiptImage(null)
       setOcrResult(null)
       setCaptureError(null)
@@ -309,6 +348,7 @@ export function AddTransactionModal({
       location: loc?.location ?? '',
       latitude: loc?.latitude ?? null,
       longitude: loc?.longitude ?? null,
+      accountId: captureAccountId || f.accountId,
     }))
     setPrefillNotice(
       ocrResult.total
@@ -334,6 +374,7 @@ export function AddTransactionModal({
       location: p.location || loc?.location || '',
       latitude: p.latitude ?? loc?.latitude ?? null,
       longitude: p.longitude ?? loc?.longitude ?? null,
+      accountId: captureAccountId || f.accountId,
     }))
     setPrefillNotice(
       p.amount
@@ -373,7 +414,7 @@ export function AddTransactionModal({
   const receiptAction = useAsyncAction()
   const saveReceipt = () => receiptAction.run(async () => {
     if (!ocrResult?.total) { alert('Jumlah tidak terbaca. Gunakan "Edit in Form" untuk mengisinya.'); return }
-    if (!saveAccountId) { alert('Belum ada akun. Buat akun dulu di menu Budgets & Categories / Accounts.'); return }
+    if (!captureAccountId) { alert('Belum ada akun. Buat akun dulu di menu Budgets & Categories / Accounts.'); return }
     try {
     const loc = receiptLocRef.current ? await receiptLocRef.current : null
     await addTransaction({
@@ -381,7 +422,7 @@ export function AddTransactionModal({
       amount: ocrResult.total,
       date: ocrResult.date || toISODate(new Date()),
       categoryId: receiptGuess?.categoryId || null,
-      accountId: saveAccountId,
+      accountId: captureAccountId,
       description: '',
       notes: '',
       receiptImage,
@@ -405,7 +446,7 @@ export function AddTransactionModal({
   const saveVoice = () => voiceAction.run(async () => {
     const p = voiceCtx.parsed
     if (!p.amount) { alert('Jumlah tidak terdengar. Gunakan "Edit in Form" untuk mengisinya.'); return }
-    if (!saveAccountId) { alert('Belum ada akun. Buat akun dulu di menu Accounts.'); return }
+    if (!captureAccountId) { alert('Belum ada akun. Buat akun dulu di menu Accounts.'); return }
     try {
     const loc = voiceLocRef.current ? await voiceLocRef.current : null
     await addTransaction({
@@ -413,7 +454,7 @@ export function AddTransactionModal({
       amount: p.amount,
       date: p.date || toISODate(new Date()),
       categoryId: voiceGuess.categoryId || null,
-      accountId: saveAccountId,
+      accountId: captureAccountId,
       description: p.description || '',
       notes: '',
       receiptImage: null,
@@ -717,13 +758,15 @@ export function AddTransactionModal({
                   </div>
                 )}
 
+                {voiceCtx.transcript && captureAccountSelect}
+
                 <div className="flex flex-wrap gap-3 pt-2">
                   <Button variant="outline" size="sm" onClick={() => voiceCtx.startListening()} disabled={voiceCtx.isListening}>
                     <Mic className="w-4 h-4 mr-1" /> Listen
                   </Button>
                   <Button
                     size="sm"
-                    disabled={!voiceCtx.parsed.amount}
+                    disabled={!voiceCtx.parsed.amount || !captureAccountId}
                     loading={voiceAction.pending}
                     onClick={saveVoice}
                   >
@@ -921,8 +964,10 @@ export function AddTransactionModal({
               </div>
             )}
 
-            <div className="flex flex-wrap gap-3 pt-4">
-              <Button size="sm" disabled={!ocrResult?.total} loading={receiptAction.pending} onClick={saveReceipt}>
+            {ocrResult && <div className="pt-4">{captureAccountSelect}</div>}
+
+            <div className="flex flex-wrap gap-3 pt-3">
+              <Button size="sm" disabled={!ocrResult?.total || !captureAccountId} loading={receiptAction.pending} onClick={saveReceipt}>
                 {receiptAction.pending ? 'Saving...' : 'Save Transaction'}
               </Button>
               <Button variant="outline" size="sm" onClick={fillFormFromReceipt} disabled={!ocrResult}>
