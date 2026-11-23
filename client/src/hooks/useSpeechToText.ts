@@ -5,6 +5,7 @@ import { toISODate } from '../utils/dates'
 import { ID_DATE_PHRASES, DATE_PATTERNS } from '../utils/parsers'
 import { parseIDRAmount } from '../utils/currency'
 import { parseVoiceWithAI, isAIAvailable } from '../lib/aiParser'
+import { describeSpeechError } from '../utils/mediaPermission'
 import { useSupabaseAuth } from '../auth/SupabaseAuthContext'
 
 interface SpeechRecognitionEvent extends Event {
@@ -255,7 +256,8 @@ export function useSpeechToText(categories: Category[]) {
     }
 
     recognition.onerror = (event: any) => {
-      setError(`Speech recognition error: ${event.error}`)
+      // Satu-satunya pemicu izin mikrofon di sini adalah recognition.start() (tidak ada getUserMedia ganda).
+      setError(describeSpeechError(String(event.error)) || null)
       setIsListening(false)
     }
 
