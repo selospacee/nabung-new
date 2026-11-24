@@ -984,7 +984,7 @@ export function AddTransactionModal({
                     <div className="p-3 rounded-lg border border-border bg-card col-span-2">
                       <span className="text-xs text-muted-foreground">Menu (jadi Notes)</span>
                       <ul className="text-sm mt-0.5 space-y-0.5">
-                        {ocrResult.items.map((it, i) => <li key={i} className="break-words">{it}</li>)}
+                        {ocrResult.items.map((it: string, i: number) => <li key={i} className="break-words">{it}</li>)}
                       </ul>
                     </div>
                   )}
