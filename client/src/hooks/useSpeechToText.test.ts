@@ -59,25 +59,25 @@ describe('useSpeechToText — amount extraction (#3)', () => {
   ]
 
   for (const [transcript, expected] of amountCases) {
-    it(`parses "${transcript}" -> ${expected} cents`, () => {
+    it(`parses "${transcript}" -> ${expected} cents`, async () => {
       const { result } = renderHook(() => useSpeechToText([]))
-      act(() => result.current.startListening())
+      await act(async () => { await result.current.startListening() })
       speak(transcript)
       expect(result.current.transcript).toBe(transcript)
       expect(result.current.parsed.amount).toBe(expected)
     })
   }
 
-  it('leaves amount null when the transcript has no number', () => {
+  it('leaves amount null when the transcript has no number', async () => {
     const { result } = renderHook(() => useSpeechToText([]))
-    act(() => result.current.startListening())
+    await act(async () => { await result.current.startListening() })
     speak('beli kopi')
     expect(result.current.parsed.amount).toBeNull()
   })
 
-  it('re-parses on end using the last final transcript', () => {
+  it('re-parses on end using the last final transcript', async () => {
     const { result } = renderHook(() => useSpeechToText([]))
-    act(() => result.current.startListening())
+    await act(async () => { await result.current.startListening() })
     speak('bayar 1.500.000')
     act(() => {
       FakeSpeechRecognition.last!.onend!()
@@ -98,9 +98,9 @@ describe('useSpeechToText — merchant is internal only', () => {
     delete (window as any).webkitSpeechRecognition
   })
 
-  it('does not expose merchant and keeps the full spoken text as description', () => {
+  it('does not expose merchant and keeps the full spoken text as description', async () => {
     const { result } = renderHook(() => useSpeechToText([]))
-    act(() => result.current.startListening())
+    await act(async () => { await result.current.startListening() })
     speak('makan siang kopi kenangan 30.600')
     expect(result.current.parsed).not.toHaveProperty('merchant')
     expect(result.current.parsed.description).toContain('kopi kenangan')

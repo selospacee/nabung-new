@@ -6,6 +6,7 @@ import { ID_DATE_PHRASES, DATE_PATTERNS } from '../utils/parsers'
 import { parseIDRAmount } from '../utils/currency'
 import { parseVoiceWithAI, isAIAvailable } from '../lib/aiParser'
 import { useSupabaseAuth } from '../auth/SupabaseAuthContext'
+import { getPermissionStatus, MIC_DENIED_MESSAGE } from '../lib/permissions'
 
 interface SpeechRecognitionEvent extends Event {
   resultIndex: number
@@ -221,10 +222,16 @@ export function useSpeechToText(categories: Category[]) {
     return null
   }
 
-  const startListening = useCallback(() => {
+  const startListening = useCallback(async () => {
     const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SpeechRecognitionAPI) {
       setError('Speech recognition is not supported in this browser. Try Chrome or Edge.')
+      return
+    }
+
+    // Izin mikrofon yang sudah ditolak: jangan mulai sesi baru, cukup tampilkan petunjuknya.
+    if (await getPermissionStatus('microphone') === 'denied') {
+      setError(MIC_DENIED_MESSAGE)
       return
     }
 
@@ -255,7 +262,8 @@ export function useSpeechToText(categories: Category[]) {
     }
 
     recognition.onerror = (event: any) => {
-      setError(`Speech recognition error: ${event.error}`)
+      const denied = event.error === 'not-allowed' || event.error === 'service-not-allowed'
+      setError(denied ? MIC_DENIED_MESSAGE : `Speech recognition error: ${event.error}`)
       setIsListening(false)
     }
 

@@ -1169,6 +1169,8 @@ export function TransactionsPage() {
                         </Button>
                       </div>
 
+                {cam.error && <Alert variant="destructive" className="mb-3">{cam.error}</Alert>}
+
                 {hasStream ? (
                                   <div className="relative rounded-lg overflow-hidden border border-border bg-black aspect-video">
                                     <video ref={cameraRef} autoPlay playsInline muted className="w-full h-full object-cover" />

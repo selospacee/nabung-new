@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { getPermissionStatus, CAMERA_DENIED_MESSAGE } from '../lib/permissions'
 
 /**
  * Owns a camera MediaStream so it can ALWAYS be released.
@@ -16,6 +17,7 @@ export function useCameraStream() {
   const streamRef = useRef<MediaStream | null>(null)
   const videoElRef = useRef<HTMLVideoElement | null>(null)
   const requestIdRef = useRef(0)
+  const pendingRef = useRef<{ facingMode: string; promise: Promise<MediaStream | null> } | null>(null)
   const [active, setActive] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -36,6 +38,7 @@ export function useCameraStream() {
   const stop = useCallback(() => {
     // Invalidate any getUserMedia request still in flight so it releases its own stream.
     requestIdRef.current++
+    pendingRef.current = null
     const stream = streamRef.current
     streamRef.current = null
     stream?.getTracks().forEach(t => t.stop())
@@ -43,32 +46,46 @@ export function useCameraStream() {
     setActive(false)
   }, [])
 
-  const start = useCallback(async (facingMode: 'user' | 'environment' = 'environment'): Promise<MediaStream | null> => {
+  const start = useCallback((facingMode: 'user' | 'environment' = 'environment'): Promise<MediaStream | null> => {
+    // Permintaan yang masih menunggu izin untuk mode yang sama dipakai ulang. Tombol "Open Camera" yang
+    // ditekan saat prompt masih terbuka (atau auto-open ganda) tidak memanggil getUserMedia kedua.
+    const pending = pendingRef.current
+    if (pending && pending.facingMode === facingMode) return pending.promise
     stop()
     const requestId = requestIdRef.current
     setError(null)
-    try {
-      if (!navigator.mediaDevices?.getUserMedia) throw new Error('Camera is not supported in this browser.')
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: facingMode } },
-        audio: false,
-      })
-      // stop() was called (or another start()) while the permission prompt was open: release it.
-      if (requestId !== requestIdRef.current) {
-        stream.getTracks().forEach(t => t.stop())
+    const promise = (async (): Promise<MediaStream | null> => {
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) throw new Error('Camera is not supported in this browser.')
+        // 'denied' berarti getUserMedia pasti gagal; cukup beri tahu pengguna, jangan minta lagi.
+        if (await getPermissionStatus('camera') === 'denied') throw new Error(CAMERA_DENIED_MESSAGE)
+        if (requestId !== requestIdRef.current) return null
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: facingMode } },
+          audio: false,
+        })
+        // stop() was called (or another start()) while the permission prompt was open: release it.
+        if (requestId !== requestIdRef.current) {
+          stream.getTracks().forEach(t => t.stop())
+          return null
+        }
+        streamRef.current = stream
+        setActive(true)
+        attach()
+        return stream
+      } catch (e: any) {
+        if (requestId === requestIdRef.current) {
+          setError(e?.name === 'NotAllowedError' ? CAMERA_DENIED_MESSAGE : (e?.message || 'Camera access denied.'))
+          setActive(false)
+        }
         return null
       }
-      streamRef.current = stream
-      setActive(true)
-      attach()
-      return stream
-    } catch (e: any) {
-      if (requestId === requestIdRef.current) {
-        setError(e?.message || 'Camera access denied.')
-        setActive(false)
-      }
-      return null
-    }
+    })()
+    pendingRef.current = { facingMode, promise }
+    void promise.finally(() => {
+      if (pendingRef.current?.promise === promise) pendingRef.current = null
+    })
+    return promise
   }, [stop, attach])
 
   const getVideoTrack = useCallback(() => streamRef.current?.getVideoTracks()[0] ?? null, [])
