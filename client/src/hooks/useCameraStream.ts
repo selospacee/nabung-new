@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { describeCameraError } from '../utils/mediaPermission'
 
 /**
  * Owns a camera MediaStream so it can ALWAYS be released.
@@ -64,7 +65,7 @@ export function useCameraStream() {
       return stream
     } catch (e: any) {
       if (requestId === requestIdRef.current) {
-        setError(e?.message || 'Camera access denied.')
+        setError(describeCameraError(e?.name, e?.message))
         setActive(false)
       }
       return null

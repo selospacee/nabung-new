@@ -7,6 +7,8 @@ import { X, Receipt, Mic, Camera, FileText, Loader2, MapPin, RefreshCw, Pencil, 
 import { useSpeechToText } from '../hooks/useSpeechToText'
 import { useReceiptOcr } from '../hooks/useReceiptOcr'
 import { useCameraStream } from '../hooks/useCameraStream'
+import { useMediaPermission } from '../hooks/useMediaPermission'
+import { mapPermissionToAction, canAutoStart, blockedInstructions } from '../utils/mediaPermission'
 import { useAsyncAction } from '../hooks/useAsyncAction'
 import type { Transaction as TxType } from '../types'
 import { db } from '../db'
@@ -94,6 +96,11 @@ export function AddTransactionModal({
 
   // Camera: only opened when the user presses "Open Camera" and always released (see useCameraStream).
   const cam = useCameraStream()
+  const camPerm = useMediaPermission('camera')
+  const micPerm = useMediaPermission('microphone')
+  const camAction = mapPermissionToAction(camPerm.state)
+  const micAction = mapPermissionToAction(micPerm.state)
+  const camAutoTriedRef = useRef(false)
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment')
   const [zoomLevel, setZoomLevel] = useState(1)
   const [maxZoom, setMaxZoom] = useState(1)
@@ -212,6 +219,14 @@ export function AddTransactionModal({
     setMaxZoom(caps?.zoom?.max ?? 1)
     setZoomLevel(1)
   }, [cam.start, facingMode])
+
+  // Izin kamera sudah 'granted': buka otomatis (tidak memicu prompt). Selain itu menunggu klik pengguna.
+  useEffect(() => {
+    if (!open || activeTab !== 'camera') { camAutoTriedRef.current = false; return }
+    if (camAutoTriedRef.current || cam.active || !canAutoStart(camPerm.state)) return
+    camAutoTriedRef.current = true
+    void openCamera()
+  }, [open, activeTab, camPerm.state, cam.active, openCamera])
 
   const flipCamera = () => {
     const next = facingMode === 'user' ? 'environment' : 'user'
@@ -601,10 +616,19 @@ export function AddTransactionModal({
                   </div>
                 </>
               ) : (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                  <Button variant="outline" onClick={() => openCamera()} className="w-auto">
-                    <Camera className="w-4 h-4 mr-2" /> Open Camera
-                  </Button>
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/50 p-4 text-center">
+                  {camAction === 'blocked' ? (
+                    <p className="text-sm text-white/90">{blockedInstructions('camera')}</p>
+                  ) : (
+                    <>
+                      {camAction === 'ask' && (
+                        <p className="text-sm text-white/90">Kamera dipakai untuk memotret struk. Browser akan meminta izin saat kamu menekan tombol di bawah.</p>
+                      )}
+                      <Button variant="outline" onClick={() => openCamera()} className="w-auto">
+                        <Camera className="w-4 h-4 mr-2" /> {camAction === 'ask' ? 'Izinkan kamera' : 'Open Camera'}
+                      </Button>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -683,6 +707,11 @@ export function AddTransactionModal({
                   </Select>
                 </div>
 
+                {micAction === 'blocked' && <Alert variant="warning">{blockedInstructions('microphone')}</Alert>}
+                {micAction === 'ask' && !voiceCtx.isListening && (
+                  <p className="text-xs text-muted-foreground">Mikrofon dipakai untuk mencatat lewat suara. Browser akan meminta izin saat kamu menekan tombol di bawah.</p>
+                )}
+
                 {voiceCtx.error && <Alert variant="destructive">{voiceCtx.error}</Alert>}
 
                 {voiceCtx.transcript && (
@@ -718,8 +747,8 @@ export function AddTransactionModal({
                 )}
 
                 <div className="flex flex-wrap gap-3 pt-2">
-                  <Button variant="outline" size="sm" onClick={() => voiceCtx.startListening()} disabled={voiceCtx.isListening}>
-                    <Mic className="w-4 h-4 mr-1" /> Listen
+                  <Button variant="outline" size="sm" onClick={() => voiceCtx.startListening()} disabled={voiceCtx.isListening || micAction === 'blocked'}>
+                    <Mic className="w-4 h-4 mr-1" /> {micAction === 'ask' ? 'Izinkan mikrofon' : 'Listen'}
                   </Button>
                   <Button
                     size="sm"
