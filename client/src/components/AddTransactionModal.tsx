@@ -357,7 +357,8 @@ export function AddTransactionModal({
       amount: ocrResult.total ? String(ocrResult.total / 100) : '',
       date: ocrResult.date || toISODate(new Date()),
       categoryId: receiptGuess?.categoryId || '',
-      description: '',
+      description: ocrResult.merchant || '',
+      notes: (ocrResult.items || []).join('\n'),
       receiptImage,
       receiptOcrText: ocrResult.text ?? null,
       location: loc?.location ?? '',
@@ -438,8 +439,8 @@ export function AddTransactionModal({
       date: ocrResult.date || toISODate(new Date()),
       categoryId: receiptGuess?.categoryId || null,
       accountId: captureAccountId,
-      description: '',
-      notes: '',
+      description: ocrResult.merchant || '',
+      notes: (ocrResult.items || []).join('\n'),
       receiptImage,
       receiptOcrText: ocrResult.text ?? null,
       location: loc?.location ?? '',
@@ -971,6 +972,20 @@ export function AddTransactionModal({
                     <div className="p-3 rounded-lg border border-border bg-card">
                       <span className="text-xs text-muted-foreground">Category (auto)</span>
                       <p className="text-sm mt-0.5">{categoryName(receiptGuess.categoryId)}</p>
+                    </div>
+                  )}
+                  {ocrResult.merchant && (
+                    <div className="p-3 rounded-lg border border-border bg-card col-span-2">
+                      <span className="text-xs text-muted-foreground">Judul / toko (jadi Deskripsi)</span>
+                      <p className="text-sm mt-0.5 break-words">{ocrResult.merchant}</p>
+                    </div>
+                  )}
+                  {ocrResult.items && ocrResult.items.length > 0 && (
+                    <div className="p-3 rounded-lg border border-border bg-card col-span-2">
+                      <span className="text-xs text-muted-foreground">Menu (jadi Notes)</span>
+                      <ul className="text-sm mt-0.5 space-y-0.5">
+                        {ocrResult.items.map((it, i) => <li key={i} className="break-words">{it}</li>)}
+                      </ul>
                     </div>
                   )}
                   {ocrResult.date && (
