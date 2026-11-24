@@ -302,13 +302,13 @@ export function BudgetsPage() {
   }
 
   // Ditolak bila kategori masih dipakai transaksi atau budget (lihat db/usage.ts).
-  const handleDeleteCategory = async (id: string) => {
-    if (!confirm('Delete this category? It must not be used by any transaction or budget.')) return
+  const handleDeleteCategory = async (id: string, name: string) => {
+    if (!confirm(`Hapus kategori "${name}"? Kategori yang masih dipakai transaksi atau budget tidak bisa dihapus.`)) return
     try {
       await softDeleteCategory(id)
     } catch (error) {
       if (error instanceof InUseError) return alert(error.message)
-      throw error
+      return alert('Gagal menghapus kategori: ' + (error instanceof Error ? error.message : String(error)))
     }
     await pushLocalChangesToSupabase(userId || '')
   }
@@ -647,8 +647,8 @@ export function BudgetsPage() {
                                 </Badge>
                               </div>
                             </div>
-                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
+                            <div className="flex gap-1 opacity-100 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Edit akun" onClick={() => {
                                 setAccountForm({
                                   name: account.name,
                                   type: account.type,
@@ -660,13 +660,13 @@ export function BudgetsPage() {
                               }}>
                                 <Edit3 className="w-3.5 h-3.5" />
                               </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => {
-                                if (confirm('Delete this account?')) {
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" aria-label="Hapus akun" onClick={() => {
+                                if (confirm(`Hapus akun "${account.name}"? Akun yang masih punya transaksi tidak bisa dihapus.`)) {
                                   softDeleteAccount(account.id)
                                     .then(() => pushLocalChangesToSupabase(userId || ''))
                                     .catch(error => {
                                       if (error instanceof InUseError) alert(error.message)
-                                      else throw error
+                                      else alert('Gagal menghapus akun: ' + (error instanceof Error ? error.message : String(error)))
                                     });
                                 }
                               }}>
@@ -783,6 +783,13 @@ export function BudgetsPage() {
             ))}
           </div>
 
+          {/* Actions */}
+          <div className="flex justify-end">
+            <Button onClick={() => resetCategoryForm()}>
+              <Plus className="w-4 h-4 mr-2" /> Add Category
+            </Button>
+          </div>
+
           {/* Categories list */}
           {(filteredCategories[activeCategoryType] || []).length === 0 ? (
             <EmptyState
@@ -816,11 +823,11 @@ export function BudgetsPage() {
                         )}
                       </div>
                     </div>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => resetCategoryForm(cat)}>
+                    <div className="flex gap-1 opacity-100 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Edit kategori" onClick={() => resetCategoryForm(cat)}>
                         <Edit3 className="w-3.5 h-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteCategory(cat.id)}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" aria-label="Hapus kategori" onClick={() => handleDeleteCategory(cat.id, cat.name)}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>
