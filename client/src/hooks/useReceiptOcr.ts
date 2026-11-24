@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react'
 import Tesseract from 'tesseract.js'
-import { parseReceiptWithAI, isAIAvailable } from '../lib/aiParser'
 import { prepareImageForOcr } from '../utils/imagePrep'
 import { pickReceiptTitle, pickReceiptTotal } from '../utils/receiptTitle'
 
@@ -25,7 +24,6 @@ interface CategoryPattern {
 
 const OCR_LANGS = 'ind+eng'
 const OCR_FALLBACK_LANG = 'eng'
-const AI_TIMEOUT_MS = 6000
 
 function findCategoryFromPatterns(categories: CategoryPattern[], merchant: string, description: string): string | null {
   const text = `${merchant} ${description}`.toLowerCase()
@@ -72,32 +70,6 @@ async function applyReceiptParams(worker: OcrWorker): Promise<void> {
   }
 }
 
-/**
- * Total dari AI sebagai perbaikan tambahan, hanya bila OCR lokal tidak menemukan total.
- * Mengirim gambar struk ke edge function. Hanya untuk data URL base64. Tidak pernah melempar error.
- */
-async function askAiForTotal(imageSource: string | HTMLImageElement): Promise<number | null> {
-  if (typeof imageSource !== 'string') return null
-  const m = /^data:(image\/[\w.+-]+);base64,(.+)$/s.exec(imageSource)
-  if (!m) return null
-
-  let timer: ReturnType<typeof setTimeout> | undefined
-  try {
-    const timeout = new Promise<null>(resolve => {
-      timer = setTimeout(() => resolve(null), AI_TIMEOUT_MS)
-    })
-    // categories kosong: hanya total yang dipakai dari hasil AI
-    const ai = await Promise.race([parseReceiptWithAI(m[2], [], m[1]), timeout])
-    const total = ai?.total
-    return typeof total === 'number' && Number.isFinite(total) && total > 0 ? Math.round(total) : null
-  } catch (e) {
-    console.warn('[OCR] Fallback AI gagal, pakai hasil lokal:', e)
-    return null
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
 export function useReceiptOcr(categories: CategoryPattern[] = []) {
   const [isProcessing, setIsProcessing] = useState(false)
   const [aiParsing, setAiParsing] = useState(false)
@@ -122,15 +94,7 @@ export function useReceiptOcr(categories: CategoryPattern[] = []) {
         const parsed = parseReceiptText(rawText, rawLines)
         const merchant = pickReceiptTitle(rawLines, categories.flatMap(c => c.merchantPatterns))
 
-        let total = parsed.total
-        if (total === null && isAIAvailable()) {
-          setAiParsing(true)
-          try {
-            total = await askAiForTotal(imageSource)
-          } finally {
-            setAiParsing(false)
-          }
-        }
+        const total = parsed.total
 
         // Merchant hanya dipakai untuk menebak kategori lewat merchantPatterns.
         const suggestedCategoryId = findCategoryFromPatterns(categories, merchant ?? '', rawText)

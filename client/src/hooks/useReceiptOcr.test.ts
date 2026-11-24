@@ -147,7 +147,7 @@ describe('useReceiptOcr — OCR setup', () => {
   })
 })
 
-describe('useReceiptOcr — merchant dan AI', () => {
+describe('useReceiptOcr — merchant', () => {
   it('merchant null bila tidak ada baris yang layak sebagai nama toko', async () => {
     ocr.recognize.mockResolvedValue({ data: { text: '12345\nTotal 5.000', confidence: 70 } })
     const { result } = renderHook(() => useReceiptOcr())
@@ -158,7 +158,7 @@ describe('useReceiptOcr — merchant dan AI', () => {
     expect(value.total).toBe(500_000)
   })
 
-  it('AI tidak dipanggil ketika OCR lokal sudah menemukan total', async () => {
+  it('struk tidak pernah dikirim ke AI', async () => {
     ocr.recognize.mockResolvedValue({ data: { text: 'TOKO ABC\nTotal 10.000', confidence: 80 } })
     const { result } = renderHook(() => useReceiptOcr())
 
