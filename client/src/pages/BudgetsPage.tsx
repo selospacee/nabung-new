@@ -783,6 +783,13 @@ export function BudgetsPage() {
             ))}
           </div>
 
+          {/* Actions */}
+          <div className="flex justify-end">
+            <Button onClick={() => resetCategoryForm()}>
+              <Plus className="w-4 h-4 mr-2" /> Add Category
+            </Button>
+          </div>
+
           {/* Categories list */}
           {(filteredCategories[activeCategoryType] || []).length === 0 ? (
             <EmptyState
