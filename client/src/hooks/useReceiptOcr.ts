@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import Tesseract from 'tesseract.js'
 import { prepareImageForOcr } from '../utils/imagePrep'
 import { pickReceiptTitle, pickReceiptTotal } from '../utils/receiptTitle'
+import { extractReceiptItems } from '../utils/receiptItems'
 
 export interface OcrResult {
   text: string
@@ -11,8 +12,10 @@ export interface OcrResult {
   suggestedType: 'income' | 'expense' | 'transfer'
   suggestedCategoryId: string | null
   rawLines: string[]
-  /** Nama toko dari baris atas struk. Hanya untuk tebakan kategori; UI tidak menampilkannya. */
+  /** Judul/nama toko dari baris atas struk. Mengisi kolom Deskripsi; juga dipakai menebak kategori. */
   merchant?: string | null
+  /** Menu/barang dari struk ("Nasi Goreng x2 — 50.000"). Mengisi kolom Notes. */
+  items?: string[]
 }
 
 interface CategoryPattern {
@@ -110,6 +113,7 @@ export function useReceiptOcr(categories: CategoryPattern[] = []) {
           suggestedCategoryId,
           rawLines,
           merchant,
+          items: extractReceiptItems(rawLines, merchant),
         }
       } catch (e: any) {
         setError(e.message || 'OCR failed')
