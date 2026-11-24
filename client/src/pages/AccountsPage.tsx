@@ -97,13 +97,13 @@ export function AccountsPage() {
     }
 
   // Ditolak bila akun masih dipakai transaksi.
-  const handleDelete = async (id: string) => {
-      if (!confirm('Delete this account?')) return
+  const handleDelete = async (id: string, name: string) => {
+      if (!confirm(`Hapus akun "${name}"? Akun yang masih punya transaksi tidak bisa dihapus.`)) return
       try {
         await softDeleteAccount(id)
       } catch (error) {
         if (error instanceof InUseError) return alert(error.message)
-        throw error
+        return alert('Gagal menghapus akun: ' + (error instanceof Error ? error.message : String(error)))
       }
       // Push to Supabase
       await pushLocalChangesToSupabase(userId || '')
@@ -189,11 +189,11 @@ export function AccountsPage() {
                                   </Badge>
                                 </div>
                               </div>
-                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => resetForm(account)}>
+                              <div className="flex gap-1 opacity-100 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Edit akun" onClick={() => resetForm(account)}>
                                   <Edit3 className="w-3.5 h-3.5" />
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(account.id)}>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" aria-label="Hapus akun" onClick={() => handleDelete(account.id, account.name)}>
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </Button>
                               </div>

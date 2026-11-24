@@ -123,13 +123,13 @@ export function CategoriesPage() {
         }
 
   // Ditolak bila kategori masih dipakai transaksi atau budget.
-  const handleDelete = async (id: string) => {
-      if (!confirm('Delete this category? It must not be used by any transaction or budget.')) return
+  const handleDelete = async (id: string, name: string) => {
+      if (!confirm(`Hapus kategori "${name}"? Kategori yang masih dipakai transaksi atau budget tidak bisa dihapus.`)) return
       try {
         await softDeleteCategory(id)
       } catch (error) {
         if (error instanceof InUseError) return alert(error.message)
-        throw error
+        return alert('Gagal menghapus kategori: ' + (error instanceof Error ? error.message : String(error)))
       }
       // Push to Supabase
       await pushLocalChangesToSupabase(userId || '')
@@ -200,11 +200,11 @@ export function CategoriesPage() {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => resetForm(cat)}>
+                <div className="flex items-center gap-1 opacity-100 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Edit kategori" onClick={() => resetForm(cat)}>
                     <Edit3 className="w-3.5 h-3.5" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(cat.id)}>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" aria-label="Hapus kategori" onClick={() => handleDelete(cat.id, cat.name)}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>
                 </div>
