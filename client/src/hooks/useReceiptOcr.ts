@@ -1,6 +1,8 @@
 import { useCallback, useState } from 'react'
 import Tesseract from 'tesseract.js'
-import { displayToCents } from '../utils/currency'
+import { parseReceiptWithAI, isAIAvailable } from '../lib/aiParser'
+import { prepareImageForOcr } from '../utils/imagePrep'
+import { pickReceiptTitle, pickReceiptTotal } from '../utils/receiptTitle'
 
 export interface OcrResult {
   text: string
@@ -10,6 +12,8 @@ export interface OcrResult {
   suggestedType: 'income' | 'expense' | 'transfer'
   suggestedCategoryId: string | null
   rawLines: string[]
+  /** Nama toko dari baris atas struk. Hanya untuk tebakan kategori; UI tidak menampilkannya. */
+  merchant?: string | null
 }
 
 interface CategoryPattern {
@@ -18,6 +22,10 @@ interface CategoryPattern {
   merchantPatterns: string[]
   type: 'income' | 'expense' | 'transfer'
 }
+
+const OCR_LANGS = 'ind+eng'
+const OCR_FALLBACK_LANG = 'eng'
+const AI_TIMEOUT_MS = 6000
 
 function findCategoryFromPatterns(categories: CategoryPattern[], merchant: string, description: string): string | null {
   const text = `${merchant} ${description}`.toLowerCase()
@@ -40,6 +48,56 @@ function findCategoryFromPatterns(categories: CategoryPattern[], merchant: strin
   return bestMatch?.id || null
 }
 
+/** Worker dengan bahasa Indonesia+Inggris; bila data 'ind' gagal dimuat, pakai 'eng' saja. */
+async function createOcrWorker(onProgress: (pct: number) => void) {
+  const logger = (m: { status: string; progress: number }) => {
+    if (m.status === 'recognizing text') onProgress(Math.round(m.progress * 100))
+  }
+  try {
+    return await Tesseract.createWorker(OCR_LANGS, 1, { logger })
+  } catch (e) {
+    console.warn(`[OCR] Bahasa ${OCR_LANGS} gagal dimuat, pakai ${OCR_FALLBACK_LANG}:`, e)
+    return await Tesseract.createWorker(OCR_FALLBACK_LANG, 1, { logger })
+  }
+}
+
+type OcrWorker = Awaited<ReturnType<typeof createOcrWorker>>
+
+/** Mode segmentasi untuk struk: satu blok teks seragam (PSM 6). Gagal diterapkan = pakai default. */
+async function applyReceiptParams(worker: OcrWorker): Promise<void> {
+  try {
+    await worker.setParameters({ tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK })
+  } catch (e) {
+    console.warn('[OCR] Parameter Tesseract tidak diterapkan, pakai default:', e)
+  }
+}
+
+/**
+ * Total dari AI sebagai perbaikan tambahan, hanya bila OCR lokal tidak menemukan total.
+ * Mengirim gambar struk ke edge function. Hanya untuk data URL base64. Tidak pernah melempar error.
+ */
+async function askAiForTotal(imageSource: string | HTMLImageElement): Promise<number | null> {
+  if (typeof imageSource !== 'string') return null
+  const m = /^data:(image\/[\w.+-]+);base64,(.+)$/s.exec(imageSource)
+  if (!m) return null
+
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    const timeout = new Promise<null>(resolve => {
+      timer = setTimeout(() => resolve(null), AI_TIMEOUT_MS)
+    })
+    // categories kosong: hanya total yang dipakai dari hasil AI
+    const ai = await Promise.race([parseReceiptWithAI(m[2], [], m[1]), timeout])
+    const total = ai?.total
+    return typeof total === 'number' && Number.isFinite(total) && total > 0 ? Math.round(total) : null
+  } catch (e) {
+    console.warn('[OCR] Fallback AI gagal, pakai hasil lokal:', e)
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export function useReceiptOcr(categories: CategoryPattern[] = []) {
   const [isProcessing, setIsProcessing] = useState(false)
   const [aiParsing, setAiParsing] = useState(false)
@@ -50,86 +108,57 @@ export function useReceiptOcr(categories: CategoryPattern[] = []) {
       setIsProcessing(true)
       setProgress(0)
       setError(null)
+      let worker: OcrWorker | null = null
 
       try {
-        const result = await Tesseract.recognize(imageSource, 'eng', {
-          logger: (m: any) => {
-            if (m.status === 'recognizing text') {
-              setProgress(Math.round((m.progress as number) * 100))
-            }
-          },
-        })
+        const image = await prepareImageForOcr(imageSource)
+        worker = await createOcrWorker(setProgress)
+        await applyReceiptParams(worker)
+        const result = await worker.recognize(image)
 
         const rawText = result.data.text
         const rawLines = rawText.split('\n').filter(l => l.trim().length > 0)
 
-        // Parse merchant, total, date
         const parsed = parseReceiptText(rawText, rawLines)
+        const merchant = pickReceiptTitle(rawLines, categories.flatMap(c => c.merchantPatterns))
 
-        // Merchant name is parsed only to guess the category (merchantPatterns);
-        // it is intentionally not returned or displayed.
-        // Find suggested category based on merchant patterns
-        const suggestedCategoryId = findCategoryFromPatterns(categories, parsed.merchant || '', rawText)
+        let total = parsed.total
+        if (total === null && isAIAvailable()) {
+          setAiParsing(true)
+          try {
+            total = await askAiForTotal(imageSource)
+          } finally {
+            setAiParsing(false)
+          }
+        }
+
+        // Merchant hanya dipakai untuk menebak kategori lewat merchantPatterns.
+        const suggestedCategoryId = findCategoryFromPatterns(categories, merchant ?? '', rawText)
 
         setProgress(100)
 
         return {
           text: rawText,
           confidence: result.data.confidence,
-          total: parsed.total,
+          total,
           date: parsed.date,
           suggestedType: parsed.suggestedType,
           suggestedCategoryId,
           rawLines,
+          merchant,
         }
       } catch (e: any) {
         setError(e.message || 'OCR failed')
         setProgress(0)
         throw e
       } finally {
+        if (worker) await worker.terminate().catch(() => undefined)
         setIsProcessing(false)
       }
     }, [categories])
 
-  const parseReceiptText = (text: string, lines: string[]): { merchant: string | null; total: number | null; date: string | null; suggestedType: 'income' | 'expense' | 'transfer' } => {
-    const lower = text.toLowerCase()
-
-    // Find total: look for "Total", "Grand Total", "Amount Due", "Amount" near bottom
-    const totalPatterns = [
-      /(?:grand\s+)?total[:\s]*(?:rp\s*)?([\d][\d.,]*)/i,
-      /(?:amount\s+due|amount\s+payable|total\s+amount)[:\s]*(?:rp\s*)?([\d][\d.,]*)/i,
-      /(?:total|grand\s+total)[:\s]*(?:rp\s*)?([\d][\d.,]*)/i,
-    ]
-
-    let total: number | null = null
-
-    for (const pattern of totalPatterns) {
-      const match = lower.match(pattern)
-      if (match) {
-        // displayToCents handles both "50.000" (ID thousands) and "50,000.00"
-        total = displayToCents(match[1])
-        break
-      }
-    }
-
-    // If no total found, look at last few lines for a number
-    if (!total && lines.length > 0) {
-      const lastLines = lines.slice(-5).join(' ').toLowerCase()
-      const lastNumMatch = lastLines.match(/([\d,]+\.\d{2})/)
-      if (lastNumMatch) {
-        total = Math.round(parseFloat(lastNumMatch[1].replace(/,/g, '')) * 100)
-      }
-    }
-
-    // Find merchant: first non-empty line (usually store name)
-    let merchant: string | null = null
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (trimmed.length > 2 && !trimmed.match(/^\d/) && !trimmed.match(/^(total|grand|amount|date|receipt|invoice|no\.?|nomor)/i)) {
-        merchant = trimmed
-        break
-      }
-    }
+  const parseReceiptText = (text: string, lines: string[]): { total: number | null; date: string | null; suggestedType: 'income' | 'expense' | 'transfer' } => {
+    const total = pickReceiptTotal(lines)
 
     // Find date
     const datePatterns = [
@@ -170,7 +199,7 @@ export function useReceiptOcr(categories: CategoryPattern[] = []) {
       }
     }
 
-    return { merchant, total, date, suggestedType: 'expense' as const }
+    return { total, date, suggestedType: 'expense' as const }
   }
 
   return {

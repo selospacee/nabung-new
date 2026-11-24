@@ -1,14 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 
-vi.mock('tesseract.js', () => ({
-  default: { recognize: vi.fn() },
+const ocr = vi.hoisted(() => ({
+  recognize: vi.fn(),
+  createWorker: vi.fn(),
+  logger: undefined as undefined | ((m: { status: string; progress: number }) => void),
 }))
 
-import Tesseract from 'tesseract.js'
-import { useReceiptOcr } from './useReceiptOcr'
+vi.mock('tesseract.js', () => ({
+  default: {
+    PSM: { SINGLE_BLOCK: '6' },
+    createWorker: ocr.createWorker,
+  },
+}))
 
-const recognize = Tesseract.recognize as unknown as ReturnType<typeof vi.fn>
+// AI dimatikan di tes; jalur AI diuji terpisah bila perlu.
+vi.mock('../lib/aiParser', () => ({
+  isAIAvailable: () => false,
+  parseReceiptWithAI: vi.fn(),
+}))
+
+// Pra-pemrosesan kanvas tidak tersedia di jsdom; tes ini hanya menguji alur OCR.
+vi.mock('../utils/imagePrep', () => ({
+  prepareImageForOcr: async (src: unknown) => src,
+}))
+
+import { useReceiptOcr } from './useReceiptOcr'
+import { parseReceiptWithAI } from '../lib/aiParser'
 
 async function run(recognizeReceipt: (src: string) => Promise<unknown>, src = 'data:image/jpeg;base64,AAAA') {
   let value: any = null
@@ -23,13 +41,23 @@ async function run(recognizeReceipt: (src: string) => Promise<unknown>, src = 'd
   return { value, thrown }
 }
 
-describe('useReceiptOcr — error path (#4)', () => {
-  beforeEach(() => {
-    recognize.mockReset()
+beforeEach(() => {
+  ocr.recognize.mockReset()
+  ocr.createWorker.mockReset()
+  ocr.createWorker.mockImplementation(async (_langs: string, _oem: number, opts: { logger?: typeof ocr.logger }) => {
+    ocr.logger = opts?.logger
+    return {
+      setParameters: vi.fn(async () => undefined),
+      recognize: (img: unknown) => ocr.recognize(img),
+      terminate: vi.fn(async () => undefined),
+    }
   })
+  vi.mocked(parseReceiptWithAI).mockReset()
+})
 
+describe('useReceiptOcr — error path (#4)', () => {
   it('rejects on OCR failure instead of resolving with an empty result', async () => {
-    recognize.mockRejectedValue(new Error('tesseract boom'))
+    ocr.recognize.mockRejectedValue(new Error('tesseract boom'))
     const { result } = renderHook(() => useReceiptOcr())
 
     const { value, thrown } = await run(result.current.recognizeReceipt)
@@ -41,7 +69,7 @@ describe('useReceiptOcr — error path (#4)', () => {
   })
 
   it('exposes the failure: error set, progress back to 0, not processing', async () => {
-    recognize.mockRejectedValue(new Error('tesseract boom'))
+    ocr.recognize.mockRejectedValue(new Error('tesseract boom'))
     const { result } = renderHook(() => useReceiptOcr())
 
     await run(result.current.recognizeReceipt)
@@ -52,8 +80,8 @@ describe('useReceiptOcr — error path (#4)', () => {
   })
 
   it('completes progress at 100 on success, and never reaches 100 on failure', async () => {
-    recognize.mockImplementation(async (_img: unknown, _lang: unknown, opts: any) => {
-      opts.logger({ status: 'recognizing text', progress: 0.42 })
+    ocr.recognize.mockImplementation(async () => {
+      ocr.logger?.({ status: 'recognizing text', progress: 0.42 })
       return { data: { text: 'TOKO ABC\nTotal: 50,000.00\n12/03/2024', confidence: 88 } }
     })
     const { result } = renderHook(() => useReceiptOcr())
@@ -61,9 +89,7 @@ describe('useReceiptOcr — error path (#4)', () => {
     const { value, thrown } = await run(result.current.recognizeReceipt)
 
     expect(thrown).toBeNull()
-    // Merchant is no longer exposed: it is only used internally to guess the category.
-    // The raw OCR text still contains the store name, so assert on that instead.
-    expect('merchant' in value).toBe(false)
+    expect(value.merchant).toBe('Toko Abc')
     expect(value.text).toContain('TOKO ABC')
     expect(value.total).toBe(5_000_000)
     expect(value.date).toBe('2024-03-12')
@@ -86,7 +112,7 @@ describe('useReceiptOcr — error path (#4)', () => {
 
   for (const [line, expected] of totalCases) {
     it(`parses receipt total "${line}" -> ${expected} cents`, async () => {
-      recognize.mockResolvedValue({ data: { text: `TOKO ABC\n${line}`, confidence: 90 } })
+      ocr.recognize.mockResolvedValue({ data: { text: `TOKO ABC\n${line}`, confidence: 90 } })
       const { result } = renderHook(() => useReceiptOcr())
 
       const { value } = await run(result.current.recognizeReceipt)
@@ -94,4 +120,50 @@ describe('useReceiptOcr — error path (#4)', () => {
       expect(value.total).toBe(expected)
     })
   }
+})
+
+describe('useReceiptOcr — OCR setup', () => {
+  it("memuat 'ind+eng' lebih dulu", async () => {
+    ocr.recognize.mockResolvedValue({ data: { text: 'TOKO ABC', confidence: 90 } })
+    const { result } = renderHook(() => useReceiptOcr())
+
+    await run(result.current.recognizeReceipt)
+
+    expect(ocr.createWorker.mock.calls[0][0]).toBe('ind+eng')
+  })
+
+  it("bila 'ind' gagal dimuat, fallback ke 'eng' dan tetap menghasilkan teks", async () => {
+    ocr.createWorker.mockImplementationOnce(async () => {
+      throw new Error('traineddata ind tidak tersedia')
+    })
+    ocr.recognize.mockResolvedValue({ data: { text: 'TOKO ABC\nTotal 10.000', confidence: 80 } })
+    const { result } = renderHook(() => useReceiptOcr())
+
+    const { value, thrown } = await run(result.current.recognizeReceipt)
+
+    expect(thrown).toBeNull()
+    expect(ocr.createWorker.mock.calls[1][0]).toBe('eng')
+    expect(value.total).toBe(1_000_000)
+  })
+})
+
+describe('useReceiptOcr — merchant dan AI', () => {
+  it('merchant null bila tidak ada baris yang layak sebagai nama toko', async () => {
+    ocr.recognize.mockResolvedValue({ data: { text: '12345\nTotal 5.000', confidence: 70 } })
+    const { result } = renderHook(() => useReceiptOcr())
+
+    const { value } = await run(result.current.recognizeReceipt)
+
+    expect(value.merchant).toBeNull()
+    expect(value.total).toBe(500_000)
+  })
+
+  it('AI tidak dipanggil ketika OCR lokal sudah menemukan total', async () => {
+    ocr.recognize.mockResolvedValue({ data: { text: 'TOKO ABC\nTotal 10.000', confidence: 80 } })
+    const { result } = renderHook(() => useReceiptOcr())
+
+    await run(result.current.recognizeReceipt)
+
+    expect(parseReceiptWithAI).not.toHaveBeenCalled()
+  })
 })
